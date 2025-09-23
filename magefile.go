@@ -50,12 +50,6 @@ func Vet() error {
 // Lint runs golangci-lint
 func Lint() error {
 	fmt.Println("🎯 Running linter...")
-	if err := sh.Run("which", "golangci-lint"); err != nil {
-		fmt.Println("Installing golangci-lint...")
-		if err := sh.Run("go", "install", "github.com/golangci/golangci-lint/cmd/golangci-lint@latest"); err != nil {
-			return err
-		}
-	}
 	return sh.Run("golangci-lint", "run")
 }
 
