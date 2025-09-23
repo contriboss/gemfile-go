@@ -6,6 +6,11 @@ import (
 	"path/filepath"
 )
 
+const (
+	gemfileName = "Gemfile"
+	gemsRbName  = "gems.rb"
+)
+
 // FilePaths contains the paths to Gemfile and Gemfile.lock
 type FilePaths struct {
 	Gemfile     string

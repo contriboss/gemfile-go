@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+const (
+	defaultGemfileName = "Gemfile"
+)
+
 // AddOptions represents options for the add command
 type AddOptions struct {
 	Name        string

@@ -9,8 +9,9 @@ import (
 
 const (
 	// Test-specific constants
-	testRailsGem = "rails"
-	testVersion  = "0.1.0"
+	testRailsGem     = "rails"
+	testVersion      = "0.1.0"
+	stateMachinesGem = "state_machines"
 )
 
 func TestParse(t *testing.T) {
