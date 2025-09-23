@@ -8,20 +8,20 @@ import (
 
 // AddOptions represents options for the add command
 type AddOptions struct {
-	Name         string
-	Version      string
-	Groups       []string
-	Source       string
-	Git          string
-	Github       string
-	Branch       string
-	Tag          string
-	Ref          string
-	Path         string
-	Require      *string
-	SkipInstall  bool
-	Strict       bool
-	Optimistic   bool
+	Name        string
+	Version     string
+	Groups      []string
+	Source      string
+	Git         string
+	Github      string
+	Branch      string
+	Tag         string
+	Ref         string
+	Path        string
+	Require     *string
+	SkipInstall bool
+	Strict      bool
+	Optimistic  bool
 }
 
 // RemoveOptions represents options for the remove command
@@ -36,23 +36,23 @@ func AddGemCommand(gemfilePath string, opts AddOptions) error {
 	if opts.Name == "" {
 		return fmt.Errorf("gem name is required")
 	}
-	
+
 	// Find Gemfile
 	if gemfilePath == "" {
 		gemfilePath = findGemfile()
 	}
-	
+
 	if _, err := os.Stat(gemfilePath); os.IsNotExist(err) {
-		return fmt.Errorf("Gemfile not found. Use 'ore init' to create one")
+		return fmt.Errorf("gemfile not found, use 'ore init' to create one")
 	}
-	
+
 	// Build dependency
 	dep := GemDependency{
 		Name:    opts.Name,
 		Groups:  opts.Groups,
 		Require: opts.Require,
 	}
-	
+
 	// Handle version constraints
 	if opts.Version != "" {
 		if opts.Strict {
@@ -63,7 +63,7 @@ func AddGemCommand(gemfilePath string, opts AddOptions) error {
 			dep.Constraints = []string{opts.Version}
 		}
 	}
-	
+
 	// Handle source options
 	if opts.Git != "" {
 		dep.Source = &Source{
@@ -92,17 +92,17 @@ func AddGemCommand(gemfilePath string, opts AddOptions) error {
 			URL:  opts.Source,
 		}
 	}
-	
+
 	// Set default groups if none specified
 	if len(dep.Groups) == 0 {
 		dep.Groups = []string{"default"}
 	}
-	
+
 	// Add gem to Gemfile
 	if err := AddGemToFile(gemfilePath, dep); err != nil {
 		return fmt.Errorf("failed to add gem to Gemfile: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -112,36 +112,36 @@ func RemoveGemCommand(gemfilePath string, opts RemoveOptions) error {
 	if len(opts.GemNames) == 0 {
 		return fmt.Errorf("at least one gem name is required")
 	}
-	
+
 	// Find Gemfile
 	if gemfilePath == "" {
 		gemfilePath = findGemfile()
 	}
-	
+
 	if _, err := os.Stat(gemfilePath); os.IsNotExist(err) {
-		return fmt.Errorf("Gemfile not found")
+		return fmt.Errorf("gemfile not found")
 	}
-	
+
 	// Remove each gem
 	for _, gemName := range opts.GemNames {
 		if err := RemoveGemFromFile(gemfilePath, gemName); err != nil {
 			return fmt.Errorf("failed to remove gem %q: %w", gemName, err)
 		}
 	}
-	
+
 	return nil
 }
 
 // findGemfile finds the Gemfile in the current directory
 func findGemfile() string {
 	candidates := []string{"Gemfile", "gems.rb"}
-	
+
 	for _, candidate := range candidates {
 		if _, err := os.Stat(candidate); err == nil {
 			return candidate
 		}
 	}
-	
+
 	return "Gemfile" // default
 }
 
@@ -150,12 +150,12 @@ func ParseGroups(groupStr string) []string {
 	if groupStr == "" {
 		return []string{"default"}
 	}
-	
+
 	groups := strings.Split(groupStr, ",")
 	for i, group := range groups {
 		groups[i] = strings.TrimSpace(group)
 	}
-	
+
 	return groups
 }
 
@@ -164,11 +164,11 @@ func ParseRequire(requireStr string) *string {
 	if requireStr == "" {
 		return nil
 	}
-	
+
 	if requireStr == "false" {
 		empty := ""
 		return &empty
 	}
-	
+
 	return &requireStr
 }

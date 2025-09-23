@@ -24,27 +24,27 @@ func FindGemfiles() (*FilePaths, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid BUNDLE_GEMFILE path: %w", err)
 		}
-		
+
 		if _, err := os.Stat(gemfile); os.IsNotExist(err) {
 			return nil, fmt.Errorf("❌ BUNDLE_GEMFILE points to non-existent file\n   Path: %s\n   💡 Check the file path or unset BUNDLE_GEMFILE", gemfile)
 		}
-		
+
 		lockfile := determineLockfilePath(gemfile)
 		return &FilePaths{
 			Gemfile:     gemfile,
 			GemfileLock: lockfile,
 		}, nil
 	}
-	
+
 	// Try standard naming conventions
 	candidates := []struct {
-		gemfile string
+		gemfile  string
 		lockfile string
 	}{
 		{"Gemfile", "Gemfile.lock"},
 		{"gems.rb", "gems.locked"},
 	}
-	
+
 	for _, candidate := range candidates {
 		if _, err := os.Stat(candidate.gemfile); err == nil {
 			// Found Gemfile, check if lockfile exists
@@ -52,17 +52,17 @@ func FindGemfiles() (*FilePaths, error) {
 			if _, err := os.Stat(lockfile); os.IsNotExist(err) {
 				return nil, fmt.Errorf("❌ Found %s but %s is missing\n   💡 Run 'bundle install' or 'bundle lock' to generate the lockfile", candidate.gemfile, lockfile)
 			}
-			
+
 			abs_gemfile, _ := filepath.Abs(candidate.gemfile)
 			abs_lockfile, _ := filepath.Abs(lockfile)
-			
+
 			return &FilePaths{
 				Gemfile:     abs_gemfile,
 				GemfileLock: abs_lockfile,
 			}, nil
 		}
 	}
-	
+
 	return nil, fmt.Errorf("❌ No Gemfile found in current directory\n   Looked for: Gemfile, gems.rb\n   💡 Create a Gemfile or set BUNDLE_GEMFILE environment variable")
 }
 
@@ -70,7 +70,7 @@ func FindGemfiles() (*FilePaths, error) {
 func determineLockfilePath(gemfilePath string) string {
 	dir := filepath.Dir(gemfilePath)
 	base := filepath.Base(gemfilePath)
-	
+
 	switch base {
 	case "Gemfile":
 		return filepath.Join(dir, "Gemfile.lock")
@@ -88,11 +88,11 @@ func FindLockfileOnly() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	
+
 	if _, err := os.Stat(paths.GemfileLock); os.IsNotExist(err) {
 		return "", fmt.Errorf("❌ Lockfile not found: %s\n   💡 Run 'bundle install' to generate the lockfile", filepath.Base(paths.GemfileLock))
 	}
-	
+
 	return paths.GemfileLock, nil
 }
 

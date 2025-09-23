@@ -74,7 +74,7 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 	scanner := bufio.NewScanner(strings.NewReader(p.content))
 	lineNum := 0
 	currentGroups := []string{"default"} // Default group
-	variables := make(map[string]string)  // Track variables
+	variables := make(map[string]string) // Track variables
 
 	for scanner.Scan() {
 		lineNum++
@@ -194,11 +194,12 @@ func (p *GemfileParser) parseGroups(line string) []string {
 
 // parseGemLine parses gem declarations
 // Examples:
-//   gem 'rails', '~> 7.0'
-//   gem 'devise', '>= 4.8', groups: [:default, :production]
-//   gem 'capybara', require: false
-//   gem 'state_machines', github: 'state-machines/state_machines', branch: 'master'
-//   gem 'commonshare_cms', path: 'components/cms'
+//
+//	gem 'rails', '~> 7.0'
+//	gem 'devise', '>= 4.8', groups: [:default, :production]
+//	gem 'capybara', require: false
+//	gem 'state_machines', github: 'state-machines/state_machines', branch: 'master'
+//	gem 'commonshare_cms', path: 'components/cms'
 func (p *GemfileParser) parseGemLine(line string, currentGroups []string) (*GemDependency, error) {
 	// Basic gem pattern: gem 'name'
 	nameRe := regexp.MustCompile(`gem\s+['"]([^'"]+)['"]`)

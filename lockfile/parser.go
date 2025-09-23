@@ -17,13 +17,13 @@ import (
 
 // Lockfile represents a parsed Gemfile.lock file.
 type Lockfile struct {
-	GemSpecs     []GemSpec              // Gems from the GEM section
-	GitSpecs     []GitGemSpec           // Gems from git repositories
-	PathSpecs    []PathGemSpec          // Gems from local paths
-	Platforms    []string               // Supported platforms (e.g., "ruby", "x86_64-linux")
-	Dependencies []Dependency           // Top-level dependencies from Gemfile
-	BundledWith  string                 // Bundler version used
-	Groups       map[string][]string    // Group name to gem names mapping
+	GemSpecs     []GemSpec           // Gems from the GEM section
+	GitSpecs     []GitGemSpec        // Gems from git repositories
+	PathSpecs    []PathGemSpec       // Gems from local paths
+	Platforms    []string            // Supported platforms (e.g., "ruby", "x86_64-linux")
+	Dependencies []Dependency        // Top-level dependencies from Gemfile
+	BundledWith  string              // Bundler version used
+	Groups       map[string][]string // Group name to gem names mapping
 }
 
 // FindGem searches for a gem by name in the lockfile.
@@ -47,12 +47,12 @@ type GemSpec struct {
 	Groups       []string     // Groups this gem belongs to
 	Checksum     string       // SHA256 for integrity verification
 	// Security and metadata
-	SourceURL        string            `json:"source_url,omitempty"`
-	PostInstallMessage string          `json:"post_install_message,omitempty"`
-	Extensions       []string          `json:"extensions,omitempty"`
-	RequiredRubyVersion string         `json:"required_ruby_version,omitempty"`
-	RequiredRubygemsVersion string     `json:"required_rubygems_version,omitempty"`
-	Metadata         map[string]string `json:"metadata,omitempty"`
+	SourceURL               string            `json:"source_url,omitempty"`
+	PostInstallMessage      string            `json:"post_install_message,omitempty"`
+	Extensions              []string          `json:"extensions,omitempty"`
+	RequiredRubyVersion     string            `json:"required_ruby_version,omitempty"`
+	RequiredRubygemsVersion string            `json:"required_rubygems_version,omitempty"`
+	Metadata                map[string]string `json:"metadata,omitempty"`
 	// Installation tracking
 	InstallationState string `json:"installation_state,omitempty"`
 	InstallationError string `json:"installation_error,omitempty"`
@@ -68,14 +68,14 @@ type GitGemSpec struct {
 	Dependencies []Dependency
 	Groups       []string
 	// Additional metadata for Git gems
-	PostInstallMessage string            `json:"post_install_message,omitempty"`
-	Extensions         []string          `json:"extensions,omitempty"`
-	RequiredRubyVersion string           `json:"required_ruby_version,omitempty"`
-	Metadata           map[string]string `json:"metadata,omitempty"`
+	PostInstallMessage  string            `json:"post_install_message,omitempty"`
+	Extensions          []string          `json:"extensions,omitempty"`
+	RequiredRubyVersion string            `json:"required_ruby_version,omitempty"`
+	Metadata            map[string]string `json:"metadata,omitempty"`
 	// Git-specific metadata
-	CommitMessage      string `json:"commit_message,omitempty"`
-	AuthorEmail        string `json:"author_email,omitempty"`
-	CommitDate         string `json:"commit_date,omitempty"`
+	CommitMessage string `json:"commit_message,omitempty"`
+	AuthorEmail   string `json:"author_email,omitempty"`
+	CommitDate    string `json:"commit_date,omitempty"`
 }
 
 type PathGemSpec struct {
@@ -90,9 +90,9 @@ type PathGemSpec struct {
 	RequiredRubyVersion string            `json:"required_ruby_version,omitempty"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
 	// Path-specific metadata
-	AbsolutePath        string `json:"absolute_path,omitempty"`
-	LastModified        string `json:"last_modified,omitempty"`
-	DevelopmentGem      bool   `json:"development_gem,omitempty"`
+	AbsolutePath   string `json:"absolute_path,omitempty"`
+	LastModified   string `json:"last_modified,omitempty"`
+	DevelopmentGem bool   `json:"development_gem,omitempty"`
 }
 
 type Dependency struct {
@@ -102,9 +102,18 @@ type Dependency struct {
 	Type        string `json:"type,omitempty"`        // "runtime", "development", "test"
 	Scope       string `json:"scope,omitempty"`       // "direct", "transitive"
 	Optional    bool   `json:"optional,omitempty"`    // Whether dependency is optional
-	Platform    string `json:"platform,omitempty"`   // Platform restriction
+	Platform    string `json:"platform,omitempty"`    // Platform restriction
 	Environment string `json:"environment,omitempty"` // Environment restriction
 }
+
+const (
+	sectionGEM          = "GEM"
+	sectionGIT          = "GIT"
+	sectionPATH         = "PATH"
+	sectionPLATFORMS    = "PLATFORMS"
+	sectionDEPENDENCIES = "DEPENDENCIES"
+	sectionBUNDLED_WITH = "BUNDLED_WITH"
+)
 
 var (
 	gemSpecRegex = regexp.MustCompile(`^    ([a-zA-Z0-9\-_]+) \(([^)]+)\)$`)
@@ -139,7 +148,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 
 		// Check for section headers
 		switch line {
-		case "GEM":
+		case sectionGEM:
 			// Save any pending Git gem before switching sections
 			if currentGitGem != nil {
 				lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
@@ -149,9 +158,9 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
 				currentPathGem = nil
 			}
-			currentSection = "GEM"
+			currentSection = sectionGEM
 			continue
-		case "GIT":
+		case sectionGIT:
 			// Save any pending gems before starting new GIT section
 			if currentGem != nil {
 				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
@@ -165,9 +174,9 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
 				currentPathGem = nil
 			}
-			currentSection = "GIT"
+			currentSection = sectionGIT
 			continue
-		case "PATH":
+		case sectionPATH:
 			// Save any pending gems before starting new PATH section
 			if currentGem != nil {
 				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
@@ -181,9 +190,9 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
 				currentPathGem = nil
 			}
-			currentSection = "PATH"
+			currentSection = sectionPATH
 			continue
-		case "PLATFORMS":
+		case sectionPLATFORMS:
 			// Save any pending gems before switching sections
 			if currentGem != nil {
 				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
@@ -197,9 +206,9 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
 				currentPathGem = nil
 			}
-			currentSection = "PLATFORMS"
+			currentSection = sectionPLATFORMS
 			continue
-		case "DEPENDENCIES":
+		case sectionDEPENDENCIES:
 			// Save any pending gems before switching sections
 			if currentGem != nil {
 				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
@@ -213,24 +222,24 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
 				currentPathGem = nil
 			}
-			currentSection = "DEPENDENCIES"
+			currentSection = sectionDEPENDENCIES
 			continue
 		}
 
 		if strings.HasPrefix(line, "BUNDLED WITH") {
-			currentSection = "BUNDLED_WITH"
+			currentSection = sectionBUNDLED_WITH
 			continue
 		}
 
 		if strings.HasPrefix(line, "  remote:") {
-			if currentSection == "GIT" {
+			if currentSection == sectionGIT {
 				// Extract Git remote URL
 				remote := strings.TrimSpace(strings.TrimPrefix(line, "  remote:"))
 				if currentGitGem == nil {
 					currentGitGem = &GitGemSpec{}
 				}
 				currentGitGem.Remote = remote
-			} else if currentSection == "PATH" {
+			} else if currentSection == sectionPATH {
 				// Extract PATH remote (local directory)
 				remote := strings.TrimSpace(strings.TrimPrefix(line, "  remote:"))
 				if currentPathGem == nil {
@@ -242,7 +251,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 			continue
 		}
 
-		if strings.HasPrefix(line, "  revision:") && currentSection == "GIT" {
+		if strings.HasPrefix(line, "  revision:") && currentSection == sectionGIT {
 			revision := strings.TrimSpace(strings.TrimPrefix(line, "  revision:"))
 			if currentGitGem == nil {
 				currentGitGem = &GitGemSpec{}
@@ -251,7 +260,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 			continue
 		}
 
-		if strings.HasPrefix(line, "  branch:") && currentSection == "GIT" {
+		if strings.HasPrefix(line, "  branch:") && currentSection == sectionGIT {
 			branch := strings.TrimSpace(strings.TrimPrefix(line, "  branch:"))
 			if currentGitGem == nil {
 				currentGitGem = &GitGemSpec{}
@@ -260,7 +269,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 			continue
 		}
 
-		if strings.HasPrefix(line, "  tag:") && currentSection == "GIT" {
+		if strings.HasPrefix(line, "  tag:") && currentSection == sectionGIT {
 			tag := strings.TrimSpace(strings.TrimPrefix(line, "  tag:"))
 			if currentGitGem == nil {
 				currentGitGem = &GitGemSpec{}
@@ -276,7 +285,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 
 		// Process lines based on current section
 		switch currentSection {
-		case "GEM":
+		case sectionGEM:
 			if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
 				// Save previous gem
 				if currentGem != nil {
@@ -313,7 +322,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				currentGem.Dependencies = append(currentGem.Dependencies, dep)
 			}
 
-		case "GIT":
+		case sectionGIT:
 			if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
 				// This is a gem spec inside a Git section
 				if currentGitGem == nil {
@@ -338,7 +347,7 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				currentGitGem.Dependencies = append(currentGitGem.Dependencies, dep)
 			}
 
-		case "PATH":
+		case sectionPATH:
 			if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
 				// This is a gem spec inside a PATH section
 				if currentPathGem == nil {
@@ -363,13 +372,13 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 				currentPathGem.Dependencies = append(currentPathGem.Dependencies, dep)
 			}
 
-		case "PLATFORMS":
+		case sectionPLATFORMS:
 			if strings.HasPrefix(line, "  ") {
 				platform := strings.TrimSpace(line)
 				lockfile.Platforms = append(lockfile.Platforms, platform)
 			}
 
-		case "DEPENDENCIES":
+		case sectionDEPENDENCIES:
 			if strings.HasPrefix(line, "  ") {
 				depLine := strings.TrimSpace(line)
 				if matches := regexp.MustCompile(`^([a-zA-Z0-9\-_]+) \(([^)]+)\)$`).FindStringSubmatch(depLine); matches != nil {

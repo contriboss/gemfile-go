@@ -10,10 +10,10 @@ import (
 // TestGemfileWriter_AddGem tests adding gems to a Gemfile
 func TestGemfileWriter_AddGem(t *testing.T) {
 	tests := []struct {
-		name        string
-		initialGemfile string
-		gem         GemDependency
-		expectedErr string
+		name            string
+		initialGemfile  string
+		gem             GemDependency
+		expectedErr     string
 		expectedContent string
 	}{
 		{
@@ -161,17 +161,17 @@ gem 'rails'`,
 			// Create temporary file
 			tmpDir := t.TempDir()
 			gemfilePath := filepath.Join(tmpDir, "Gemfile")
-			
+
 			// Write initial content
 			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0644)
 			if err != nil {
 				t.Fatalf("Failed to write initial Gemfile: %v", err)
 			}
-			
+
 			// Create writer and add gem
 			writer := NewGemfileWriter(gemfilePath)
 			err = writer.AddGem(tt.gem)
-			
+
 			// Check error expectation
 			if tt.expectedErr != "" {
 				if err == nil {
@@ -182,17 +182,17 @@ gem 'rails'`,
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			// Check content
 			content, err := os.ReadFile(gemfilePath)
 			if err != nil {
 				t.Fatalf("Failed to read Gemfile: %v", err)
 			}
-			
+
 			if string(content) != tt.expectedContent {
 				t.Fatalf("Expected content:\n%s\n\nActual content:\n%s", tt.expectedContent, string(content))
 			}
@@ -203,10 +203,10 @@ gem 'rails'`,
 // TestGemfileWriter_RemoveGem tests removing gems from a Gemfile
 func TestGemfileWriter_RemoveGem(t *testing.T) {
 	tests := []struct {
-		name        string
-		initialGemfile string
-		gemToRemove string
-		expectedErr string
+		name            string
+		initialGemfile  string
+		gemToRemove     string
+		expectedErr     string
 		expectedContent string
 	}{
 		{
@@ -257,17 +257,17 @@ gem 'rails'`,
 			// Create temporary file
 			tmpDir := t.TempDir()
 			gemfilePath := filepath.Join(tmpDir, "Gemfile")
-			
+
 			// Write initial content
 			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0644)
 			if err != nil {
 				t.Fatalf("Failed to write initial Gemfile: %v", err)
 			}
-			
+
 			// Create writer and remove gem
 			writer := NewGemfileWriter(gemfilePath)
 			err = writer.RemoveGem(tt.gemToRemove)
-			
+
 			// Check error expectation
 			if tt.expectedErr != "" {
 				if err == nil {
@@ -278,17 +278,17 @@ gem 'rails'`,
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			// Check content
 			content, err := os.ReadFile(gemfilePath)
 			if err != nil {
 				t.Fatalf("Failed to read Gemfile: %v", err)
 			}
-			
+
 			if string(content) != tt.expectedContent {
 				t.Fatalf("Expected content:\n%s\n\nActual content:\n%s", tt.expectedContent, string(content))
 			}

@@ -10,10 +10,10 @@ import (
 // TestAddGemCommand tests the add gem command
 func TestAddGemCommand(t *testing.T) {
 	tests := []struct {
-		name           string
-		initialGemfile string
-		opts           AddOptions
-		expectedErr    string
+		name            string
+		initialGemfile  string
+		opts            AddOptions
+		expectedErr     string
 		expectedContent string
 	}{
 		{
@@ -145,7 +145,7 @@ gem 'rails'
 gem 'bootsnap', require: false`,
 		},
 		{
-			name: "error on empty name",
+			name:           "error on empty name",
 			initialGemfile: `source 'https://rubygems.org'`,
 			opts: AddOptions{
 				Name: "",
@@ -169,16 +169,16 @@ gem 'rails'`,
 			// Create temporary file
 			tmpDir := t.TempDir()
 			gemfilePath := filepath.Join(tmpDir, "Gemfile")
-			
+
 			// Write initial content
-			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0644)
+			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0600)
 			if err != nil {
 				t.Fatalf("Failed to write initial Gemfile: %v", err)
 			}
-			
+
 			// Run add command
 			err = AddGemCommand(gemfilePath, tt.opts)
-			
+
 			// Check error expectation
 			if tt.expectedErr != "" {
 				if err == nil {
@@ -189,17 +189,17 @@ gem 'rails'`,
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			// Check content
 			content, err := os.ReadFile(gemfilePath)
 			if err != nil {
 				t.Fatalf("Failed to read Gemfile: %v", err)
 			}
-			
+
 			if string(content) != tt.expectedContent {
 				t.Fatalf("Expected content:\n%s\n\nActual content:\n%s", tt.expectedContent, string(content))
 			}
@@ -210,10 +210,10 @@ gem 'rails'`,
 // TestRemoveGemCommand tests the remove gem command
 func TestRemoveGemCommand(t *testing.T) {
 	tests := []struct {
-		name           string
-		initialGemfile string
-		opts           RemoveOptions
-		expectedErr    string
+		name            string
+		initialGemfile  string
+		opts            RemoveOptions
+		expectedErr     string
 		expectedContent string
 	}{
 		{
@@ -270,16 +270,16 @@ gem 'rails'`,
 			// Create temporary file
 			tmpDir := t.TempDir()
 			gemfilePath := filepath.Join(tmpDir, "Gemfile")
-			
+
 			// Write initial content
-			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0644)
+			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0600)
 			if err != nil {
 				t.Fatalf("Failed to write initial Gemfile: %v", err)
 			}
-			
+
 			// Run remove command
 			err = RemoveGemCommand(gemfilePath, tt.opts)
-			
+
 			// Check error expectation
 			if tt.expectedErr != "" {
 				if err == nil {
@@ -290,17 +290,17 @@ gem 'rails'`,
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			
+
 			// Check content
 			content, err := os.ReadFile(gemfilePath)
 			if err != nil {
 				t.Fatalf("Failed to read Gemfile: %v", err)
 			}
-			
+
 			if string(content) != tt.expectedContent {
 				t.Fatalf("Expected content:\n%s\n\nActual content:\n%s", tt.expectedContent, string(content))
 			}
@@ -370,33 +370,35 @@ func TestParseRequire(t *testing.T) {
 func TestFindGemfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	
-	os.Chdir(tmpDir)
-	
+	defer func() { _ = os.Chdir(oldDir) }()
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatal(err)
+	}
+
 	// Test default when no files exist
 	result := findGemfile()
 	if result != "Gemfile" {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)
 	}
-	
+
 	// Test Gemfile found
-	os.WriteFile("Gemfile", []byte("# test"), 0644)
+	_ = os.WriteFile("Gemfile", []byte("# test"), 0600)
 	result = findGemfile()
 	if result != "Gemfile" {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)
 	}
-	
+
 	// Test gems.rb found when Gemfile doesn't exist
 	os.Remove("Gemfile")
-	os.WriteFile("gems.rb", []byte("# test"), 0644)
+	_ = os.WriteFile("gems.rb", []byte("# test"), 0600)
 	result = findGemfile()
 	if result != "gems.rb" {
 		t.Fatalf("Expected 'gems.rb' but got %q", result)
 	}
-	
+
 	// Test Gemfile takes precedence over gems.rb
-	os.WriteFile("Gemfile", []byte("# test"), 0644)
+	_ = os.WriteFile("Gemfile", []byte("# test"), 0600)
 	result = findGemfile()
 	if result != "Gemfile" {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)

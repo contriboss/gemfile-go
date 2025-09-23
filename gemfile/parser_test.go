@@ -126,7 +126,7 @@ gem 'my_local_gem', path: '../local_gem'
 
 		// Check constraints
 		if len(dep.Constraints) != len(expected.constraints) {
-			t.Errorf("Gem %s: expected %d constraints, got %d", 
+			t.Errorf("Gem %s: expected %d constraints, got %d",
 				dep.Name, len(expected.constraints), len(dep.Constraints))
 		} else {
 			for i, constraint := range expected.constraints {

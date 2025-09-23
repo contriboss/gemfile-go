@@ -31,12 +31,16 @@ func TestFindGemfiles(t *testing.T) {
 	}
 
 	// Clean up
-	os.Remove("Gemfile")
-	os.Remove("Gemfile.lock")
+	_ = os.Remove("Gemfile")
+	_ = os.Remove("Gemfile.lock")
 
 	// Test 2: gems.rb/gems.locked
-	os.WriteFile("gems.rb", []byte("gem 'rails'"), 0644)
-	os.WriteFile("gems.locked", []byte("GEM\n  specs:\n"), 0644)
+	if err := os.WriteFile("gems.rb", []byte("gem 'rails'"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("gems.locked", []byte("GEM\n  specs:\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	paths, err = FindGemfiles()
 	if err != nil {
