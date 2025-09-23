@@ -106,18 +106,9 @@ type Dependency struct {
 	Environment string `json:"environment,omitempty"` // Environment restriction
 }
 
-const (
-	sectionGEM          = "GEM"
-	sectionGIT          = "GIT"
-	sectionPATH         = "PATH"
-	sectionPLATFORMS    = "PLATFORMS"
-	sectionDEPENDENCIES = "DEPENDENCIES"
-	sectionBUNDLED_WITH = "BUNDLED_WITH"
-)
-
 var (
-	gemSpecRegex = regexp.MustCompile(`^    ([a-zA-Z0-9\-_]+) \(([^)]+)\)$`)
-	depRegex     = regexp.MustCompile(`^      ([a-zA-Z0-9\-_]+)(?: \(([^)]+)\))?$`)
+	gemSpecRegex = regexp.MustCompile(`^ {4}([a-zA-Z0-9\-_]+) \(([^)]+)\)$`)
+	depRegex     = regexp.MustCompile(`^ {6}([a-zA-Z0-9\-_]+)(?: \(([^)]+)\))?$`)
 )
 
 // ParseFile parses a Gemfile.lock from a file path.
@@ -132,6 +123,39 @@ func ParseFile(path string) (*Lockfile, error) {
 }
 
 // Parse reads and parses a Gemfile.lock from an io.Reader.
+// savePendingGems saves any pending gems to the lockfile
+func savePendingGems(lockfile *Lockfile, currentGem **GemSpec, currentGitGem **GitGemSpec, currentPathGem **PathGemSpec) {
+	if *currentGem != nil {
+		lockfile.GemSpecs = append(lockfile.GemSpecs, **currentGem)
+		*currentGem = nil
+	}
+	if *currentGitGem != nil {
+		lockfile.GitSpecs = append(lockfile.GitSpecs, **currentGitGem)
+		*currentGitGem = nil
+	}
+	if *currentPathGem != nil {
+		lockfile.PathSpecs = append(lockfile.PathSpecs, **currentPathGem)
+		*currentPathGem = nil
+	}
+}
+
+// parseVersionAndPlatform separates version and platform from version string
+func parseVersionAndPlatform(versionAndPlatform string) (version, platform string) {
+	version = versionAndPlatform
+	platform = ""
+
+	// Check if version contains platform info (e.g., "1.13.8-x86_64-darwin")
+	parts := strings.Split(versionAndPlatform, "-")
+	hasPlatformInfo := strings.Contains(versionAndPlatform, "x86") || strings.Contains(versionAndPlatform, "darwin") ||
+		strings.Contains(versionAndPlatform, "linux") || strings.Contains(versionAndPlatform, "java")
+	if len(parts) >= 3 && hasPlatformInfo {
+		// Assume version is the first part, platform is the rest
+		version = parts[0]
+		platform = strings.Join(parts[1:], "-")
+	}
+	return version, platform
+}
+
 func Parse(reader io.Reader) (*Lockfile, error) {
 	lockfile := &Lockfile{
 		Groups: make(map[string][]string),
@@ -147,281 +171,167 @@ func Parse(reader io.Reader) (*Lockfile, error) {
 		line := scanner.Text()
 
 		// Check for section headers
-		switch line {
-		case sectionGEM:
-			// Save any pending Git gem before switching sections
-			if currentGitGem != nil {
-				lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
-				currentGitGem = nil
-			}
-			if currentPathGem != nil {
-				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
-				currentPathGem = nil
-			}
-			currentSection = sectionGEM
-			continue
-		case sectionGIT:
-			// Save any pending gems before starting new GIT section
-			if currentGem != nil {
-				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
-				currentGem = nil
-			}
-			if currentGitGem != nil {
-				lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
-				currentGitGem = nil
-			}
-			if currentPathGem != nil {
-				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
-				currentPathGem = nil
-			}
-			currentSection = sectionGIT
-			continue
-		case sectionPATH:
-			// Save any pending gems before starting new PATH section
-			if currentGem != nil {
-				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
-				currentGem = nil
-			}
-			if currentGitGem != nil {
-				lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
-				currentGitGem = nil
-			}
-			if currentPathGem != nil {
-				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
-				currentPathGem = nil
-			}
-			currentSection = sectionPATH
-			continue
-		case sectionPLATFORMS:
-			// Save any pending gems before switching sections
-			if currentGem != nil {
-				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
-				currentGem = nil
-			}
-			if currentGitGem != nil {
-				lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
-				currentGitGem = nil
-			}
-			if currentPathGem != nil {
-				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
-				currentPathGem = nil
-			}
-			currentSection = sectionPLATFORMS
-			continue
-		case sectionDEPENDENCIES:
-			// Save any pending gems before switching sections
-			if currentGem != nil {
-				lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
-				currentGem = nil
-			}
-			if currentGitGem != nil {
-				lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
-				currentGitGem = nil
-			}
-			if currentPathGem != nil {
-				lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
-				currentPathGem = nil
-			}
-			currentSection = sectionDEPENDENCIES
+		if newSection := detectSection(line); newSection != "" {
+			savePendingGems(lockfile, &currentGem, &currentGitGem, &currentPathGem)
+			currentSection = newSection
 			continue
 		}
 
-		if strings.HasPrefix(line, "BUNDLED WITH") {
-			currentSection = sectionBUNDLED_WITH
-			continue
-		}
-
-		if strings.HasPrefix(line, "  remote:") {
-			if currentSection == sectionGIT {
-				// Extract Git remote URL
-				remote := strings.TrimSpace(strings.TrimPrefix(line, "  remote:"))
-				if currentGitGem == nil {
-					currentGitGem = &GitGemSpec{}
-				}
-				currentGitGem.Remote = remote
-			} else if currentSection == sectionPATH {
-				// Extract PATH remote (local directory)
-				remote := strings.TrimSpace(strings.TrimPrefix(line, "  remote:"))
-				if currentPathGem == nil {
-					currentPathGem = &PathGemSpec{}
-				}
-				currentPathGem.Remote = remote
-			}
-			// For GEM section, skip remote URLs as before
-			continue
-		}
-
-		if strings.HasPrefix(line, "  revision:") && currentSection == sectionGIT {
-			revision := strings.TrimSpace(strings.TrimPrefix(line, "  revision:"))
-			if currentGitGem == nil {
-				currentGitGem = &GitGemSpec{}
-			}
-			currentGitGem.Revision = revision
-			continue
-		}
-
-		if strings.HasPrefix(line, "  branch:") && currentSection == sectionGIT {
-			branch := strings.TrimSpace(strings.TrimPrefix(line, "  branch:"))
-			if currentGitGem == nil {
-				currentGitGem = &GitGemSpec{}
-			}
-			currentGitGem.Branch = branch
-			continue
-		}
-
-		if strings.HasPrefix(line, "  tag:") && currentSection == sectionGIT {
-			tag := strings.TrimSpace(strings.TrimPrefix(line, "  tag:"))
-			if currentGitGem == nil {
-				currentGitGem = &GitGemSpec{}
-			}
-			currentGitGem.Tag = tag
-			continue
-		}
-
+		// Skip specs header
 		if strings.HasPrefix(line, "  specs:") {
-			// Skip specs header
 			continue
 		}
 
-		// Process lines based on current section
+		// Process line based on current section
 		switch currentSection {
-		case sectionGEM:
-			if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
-				// Save previous gem
-				if currentGem != nil {
-					lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
-				}
-
-				// Parse version and platform from version string
-				versionAndPlatform := matches[2]
-				version := versionAndPlatform
-				platform := ""
-
-				// Check if version contains platform info (e.g., "1.13.8-x86_64-darwin")
-				parts := strings.Split(versionAndPlatform, "-")
-				if len(parts) >= 3 && (strings.Contains(versionAndPlatform, "x86") || strings.Contains(versionAndPlatform, "darwin") || strings.Contains(versionAndPlatform, "linux") || strings.Contains(versionAndPlatform, "java")) {
-					// Assume version is the first part, platform is the rest
-					version = parts[0]
-					platform = strings.Join(parts[1:], "-")
-				}
-
-				// Start new gem
-				currentGem = &GemSpec{
-					Name:     matches[1],
-					Version:  version,
-					Platform: platform,
-				}
-			} else if matches := depRegex.FindStringSubmatch(line); matches != nil && currentGem != nil {
-				// Add dependency to current gem
-				dep := Dependency{
-					Name: matches[1],
-				}
-				if len(matches) > 2 && matches[2] != "" {
-					dep.Constraints = parseConstraints(matches[2])
-				}
-				currentGem.Dependencies = append(currentGem.Dependencies, dep)
+		case GemSection:
+			processGemSection(line, &currentGem, lockfile)
+		case GitSection:
+			if processGitMetadata(line, &currentGitGem) {
+				continue
 			}
-
-		case sectionGIT:
-			if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
-				// This is a gem spec inside a Git section
-				if currentGitGem == nil {
-					currentGitGem = &GitGemSpec{}
-				}
-
-				// Parse version from the gem spec line
-				versionAndPlatform := matches[2]
-				version := versionAndPlatform
-
-				// For Git gems, usually no platform info in version
-				currentGitGem.Name = matches[1]
-				currentGitGem.Version = version
-			} else if matches := depRegex.FindStringSubmatch(line); matches != nil && currentGitGem != nil {
-				// Add dependency to current Git gem
-				dep := Dependency{
-					Name: matches[1],
-				}
-				if len(matches) > 2 && matches[2] != "" {
-					dep.Constraints = parseConstraints(matches[2])
-				}
-				currentGitGem.Dependencies = append(currentGitGem.Dependencies, dep)
+			parseGemSpecForGit(line, &currentGitGem)
+			parseDependencyForGit(line, currentGitGem)
+		case PathSection:
+			if processPathMetadata(line, &currentPathGem) {
+				continue
 			}
-
-		case sectionPATH:
-			if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
-				// This is a gem spec inside a PATH section
-				if currentPathGem == nil {
-					currentPathGem = &PathGemSpec{}
-				}
-
-				// Parse version from the gem spec line
-				versionAndPlatform := matches[2]
-				version := versionAndPlatform
-
-				// For PATH gems, usually no platform info in version
-				currentPathGem.Name = matches[1]
-				currentPathGem.Version = version
-			} else if matches := depRegex.FindStringSubmatch(line); matches != nil && currentPathGem != nil {
-				// Add dependency to current PATH gem
-				dep := Dependency{
-					Name: matches[1],
-				}
-				if len(matches) > 2 && matches[2] != "" {
-					dep.Constraints = parseConstraints(matches[2])
-				}
-				currentPathGem.Dependencies = append(currentPathGem.Dependencies, dep)
-			}
-
-		case sectionPLATFORMS:
-			if strings.HasPrefix(line, "  ") {
-				platform := strings.TrimSpace(line)
-				lockfile.Platforms = append(lockfile.Platforms, platform)
-			}
-
-		case sectionDEPENDENCIES:
-			if strings.HasPrefix(line, "  ") {
-				depLine := strings.TrimSpace(line)
-				if matches := regexp.MustCompile(`^([a-zA-Z0-9\-_]+) \(([^)]+)\)$`).FindStringSubmatch(depLine); matches != nil {
-					dep := Dependency{
-						Name:        matches[1],
-						Constraints: parseConstraints(matches[2]),
-					}
-					lockfile.Dependencies = append(lockfile.Dependencies, dep)
-				} else if parts := strings.Fields(depLine); len(parts) > 0 {
-					dep := Dependency{
-						Name: parts[0],
-					}
-					lockfile.Dependencies = append(lockfile.Dependencies, dep)
-				}
-			}
-
-		case "BUNDLED_WITH":
-			if strings.HasPrefix(line, "   ") {
-				lockfile.BundledWith = strings.TrimSpace(line)
-			}
+			parseGemSpecForPath(line, &currentPathGem)
+			parseDependencyForPath(line, currentPathGem)
+		case PlatformsSection:
+			processPlatformsSection(line, lockfile)
+		case DependenciesSection:
+			processDependenciesSection(line, lockfile)
+		case BundledWithSection:
+			processBundledWithSection(line, lockfile)
 		}
 	}
 
-	// Add the last gem if exists
-	if currentGem != nil {
-		lockfile.GemSpecs = append(lockfile.GemSpecs, *currentGem)
-	}
-
-	// Add the last Git gem if exists
-	if currentGitGem != nil {
-		lockfile.GitSpecs = append(lockfile.GitSpecs, *currentGitGem)
-	}
-
-	// Add the last PATH gem if exists
-	if currentPathGem != nil {
-		lockfile.PathSpecs = append(lockfile.PathSpecs, *currentPathGem)
-	}
+	// Save any remaining pending gems
+	savePendingGems(lockfile, &currentGem, &currentGitGem, &currentPathGem)
 
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("❌ Error reading lockfile\n   💡 File may be corrupted - try regenerating with 'bundle lock'")
 	}
 
 	return lockfile, nil
+}
+
+// detectSection checks if the line is a section header and returns the section name.
+func detectSection(line string) string {
+	switch line {
+	case GemSection, GitSection, PathSection, PlatformsSection, DependenciesSection:
+		return line
+	}
+	if strings.HasPrefix(line, "BUNDLED WITH") {
+		return BundledWithSection
+	}
+	return ""
+}
+
+// processGemSection handles lines in the GEM section.
+func processGemSection(line string, currentGem **GemSpec, lockfile *Lockfile) {
+	if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
+		// Save previous gem
+		if *currentGem != nil {
+			lockfile.GemSpecs = append(lockfile.GemSpecs, **currentGem)
+		}
+		// Parse and create new gem
+		version, platform := parseVersionAndPlatform(matches[2])
+		*currentGem = &GemSpec{
+			Name:     matches[1],
+			Version:  version,
+			Platform: platform,
+		}
+	} else if matches := depRegex.FindStringSubmatch(line); matches != nil && *currentGem != nil {
+		dep := Dependency{Name: matches[1]}
+		if len(matches) > 2 && matches[2] != "" {
+			dep.Constraints = parseConstraints(matches[2])
+		}
+		(*currentGem).Dependencies = append((*currentGem).Dependencies, dep)
+	}
+}
+
+// processGitMetadata handles metadata lines in the GIT section (remote, revision, branch, tag).
+func processGitMetadata(line string, currentGitGem **GitGemSpec) bool {
+	if strings.HasPrefix(line, "  remote:") {
+		remote := strings.TrimSpace(strings.TrimPrefix(line, "  remote:"))
+		if *currentGitGem == nil {
+			*currentGitGem = &GitGemSpec{}
+		}
+		(*currentGitGem).Remote = remote
+		return true
+	}
+	if strings.HasPrefix(line, "  revision:") {
+		revision := strings.TrimSpace(strings.TrimPrefix(line, "  revision:"))
+		if *currentGitGem == nil {
+			*currentGitGem = &GitGemSpec{}
+		}
+		(*currentGitGem).Revision = revision
+		return true
+	}
+	if strings.HasPrefix(line, "  branch:") {
+		branch := strings.TrimSpace(strings.TrimPrefix(line, "  branch:"))
+		if *currentGitGem == nil {
+			*currentGitGem = &GitGemSpec{}
+		}
+		(*currentGitGem).Branch = branch
+		return true
+	}
+	if strings.HasPrefix(line, "  tag:") {
+		tag := strings.TrimSpace(strings.TrimPrefix(line, "  tag:"))
+		if *currentGitGem == nil {
+			*currentGitGem = &GitGemSpec{}
+		}
+		(*currentGitGem).Tag = tag
+		return true
+	}
+	return false
+}
+
+// processPathMetadata handles metadata lines in the PATH section (remote).
+func processPathMetadata(line string, currentPathGem **PathGemSpec) bool {
+	if strings.HasPrefix(line, "  remote:") {
+		remote := strings.TrimSpace(strings.TrimPrefix(line, "  remote:"))
+		if *currentPathGem == nil {
+			*currentPathGem = &PathGemSpec{}
+		}
+		(*currentPathGem).Remote = remote
+		return true
+	}
+	return false
+}
+
+// processPlatformsSection handles lines in the PLATFORMS section.
+func processPlatformsSection(line string, lockfile *Lockfile) {
+	if strings.HasPrefix(line, "  ") {
+		platform := strings.TrimSpace(line)
+		lockfile.Platforms = append(lockfile.Platforms, platform)
+	}
+}
+
+// processDependenciesSection handles lines in the DEPENDENCIES section.
+func processDependenciesSection(line string, lockfile *Lockfile) {
+	if strings.HasPrefix(line, "  ") {
+		depLine := strings.TrimSpace(line)
+		if matches := regexp.MustCompile(`^([a-zA-Z0-9\-_]+) \(([^)]+)\)$`).FindStringSubmatch(depLine); matches != nil {
+			dep := Dependency{
+				Name:        matches[1],
+				Constraints: parseConstraints(matches[2]),
+			}
+			lockfile.Dependencies = append(lockfile.Dependencies, dep)
+		} else if parts := strings.Fields(depLine); len(parts) > 0 {
+			dep := Dependency{Name: parts[0]}
+			lockfile.Dependencies = append(lockfile.Dependencies, dep)
+		}
+	}
+}
+
+// processBundledWithSection handles lines in the BUNDLED_WITH section.
+func processBundledWithSection(line string, lockfile *Lockfile) {
+	if strings.HasPrefix(line, "   ") {
+		lockfile.BundledWith = strings.TrimSpace(line)
+	}
 }
 
 func parseConstraints(constraintStr string) []string {
@@ -472,7 +382,8 @@ func FilterGemsByGroups(gems []GemSpec, includeGroups, excludeGroups []string) [
 	}
 
 	var filtered []GemSpec
-	for _, gem := range gems {
+	for i := range gems {
+		gem := &gems[i]
 		// Default to production group if no groups specified
 		gemGroups := gem.Groups
 		if len(gemGroups) == 0 {
@@ -480,44 +391,105 @@ func FilterGemsByGroups(gems []GemSpec, includeGroups, excludeGroups []string) [
 		}
 
 		// Check exclusions first
-		excluded := false
-		for _, excludeGroup := range excludeGroups {
-			for _, gemGroup := range gemGroups {
-				if gemGroup == excludeGroup {
-					excluded = true
-					break
-				}
-			}
-			if excluded {
-				break
-			}
-		}
-
-		if excluded {
+		if isGemExcluded(gemGroups, excludeGroups) {
 			continue
 		}
 
 		// Check inclusions
-		if len(includeGroups) > 0 {
-			included := false
-			for _, includeGroup := range includeGroups {
-				for _, gemGroup := range gemGroups {
-					if gemGroup == includeGroup || gemGroup == "default" {
-						included = true
-						break
-					}
-				}
-				if included {
-					break
-				}
-			}
-			if !included {
-				continue
-			}
+		if len(includeGroups) > 0 && !isGemIncluded(gemGroups, includeGroups) {
+			continue
 		}
 
-		filtered = append(filtered, gem)
+		filtered = append(filtered, *gem)
 	}
 
 	return filtered
+}
+
+// parseGemSpecForGit handles gem spec parsing for Git gems
+func parseGemSpecForGit(line string, currentGitGem **GitGemSpec) {
+	if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
+		// This is a gem spec inside a Git section
+		if *currentGitGem == nil {
+			*currentGitGem = &GitGemSpec{}
+		}
+
+		// Parse version from the gem spec line
+		versionAndPlatform := matches[2]
+		version := versionAndPlatform
+
+		// For Git gems, usually no platform info in version
+		(*currentGitGem).Name = matches[1]
+		(*currentGitGem).Version = version
+	}
+}
+
+// parseDependencyForGit handles dependency parsing for Git gems
+func parseDependencyForGit(line string, currentGitGem *GitGemSpec) {
+	if matches := depRegex.FindStringSubmatch(line); matches != nil && currentGitGem != nil {
+		// Add dependency to current Git gem
+		dep := Dependency{
+			Name: matches[1],
+		}
+		if len(matches) > 2 && matches[2] != "" {
+			dep.Constraints = parseConstraints(matches[2])
+		}
+		currentGitGem.Dependencies = append(currentGitGem.Dependencies, dep)
+	}
+}
+
+// parseGemSpecForPath handles gem spec parsing for Path gems
+func parseGemSpecForPath(line string, currentPathGem **PathGemSpec) {
+	if matches := gemSpecRegex.FindStringSubmatch(line); matches != nil {
+		// This is a gem spec inside a PATH section
+		if *currentPathGem == nil {
+			*currentPathGem = &PathGemSpec{}
+		}
+
+		// Parse version from the gem spec line
+		versionAndPlatform := matches[2]
+		version := versionAndPlatform
+
+		// For PATH gems, usually no platform info in version
+		(*currentPathGem).Name = matches[1]
+		(*currentPathGem).Version = version
+	}
+}
+
+// parseDependencyForPath handles dependency parsing for Path gems
+func parseDependencyForPath(line string, currentPathGem *PathGemSpec) {
+	if matches := depRegex.FindStringSubmatch(line); matches != nil && currentPathGem != nil {
+		// Add dependency to current PATH gem
+		dep := Dependency{
+			Name: matches[1],
+		}
+		if len(matches) > 2 && matches[2] != "" {
+			dep.Constraints = parseConstraints(matches[2])
+		}
+		currentPathGem.Dependencies = append(currentPathGem.Dependencies, dep)
+	}
+}
+
+// isGemExcluded checks if a gem should be excluded based on its groups
+func isGemExcluded(gemGroups, excludeGroups []string) bool {
+	for _, excludeGroup := range excludeGroups {
+		for _, gemGroup := range gemGroups {
+			if gemGroup == excludeGroup {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// isGemIncluded checks if a gem should be included based on its groups
+func isGemIncluded(gemGroups, includeGroups []string) bool {
+	for _, includeGroup := range includeGroups {
+		for _, gemGroup := range gemGroups {
+			if gemGroup == includeGroup || gemGroup == "default" {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -10,12 +10,22 @@ func TestFindGemfiles(t *testing.T) {
 	// Create temporary directory
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
-	defer os.Chdir(oldWd)
-	os.Chdir(tmpDir)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Logf("Failed to change back to original directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
 
 	// Test 1: Standard Gemfile/Gemfile.lock
-	os.WriteFile("Gemfile", []byte("gem 'rails'"), 0644)
-	os.WriteFile("Gemfile.lock", []byte("GEM\n  specs:\n"), 0644)
+	if err := os.WriteFile("Gemfile", []byte("gem 'rails'"), 0600); err != nil {
+		t.Fatalf("Failed to write Gemfile: %v", err)
+	}
+	if err := os.WriteFile("Gemfile.lock", []byte("GEM\n  specs:\n"), 0600); err != nil {
+		t.Fatalf("Failed to write Gemfile.lock: %v", err)
+	}
 
 	paths, err := FindGemfiles()
 	if err != nil {
@@ -31,15 +41,17 @@ func TestFindGemfiles(t *testing.T) {
 	}
 
 	// Clean up
-	_ = os.Remove("Gemfile")
-	_ = os.Remove("Gemfile.lock")
+	os.Remove("Gemfile")
+	os.Remove("Gemfile.lock")
 
 	// Test 2: gems.rb/gems.locked
-	if err := os.WriteFile("gems.rb", []byte("gem 'rails'"), 0644); err != nil {
-		t.Fatal(err)
+	err = os.WriteFile("gems.rb", []byte("gem 'rails'"), 0600)
+	if err != nil {
+		t.Fatalf("Failed to write gems.rb: %v", err)
 	}
-	if err := os.WriteFile("gems.locked", []byte("GEM\n  specs:\n"), 0644); err != nil {
-		t.Fatal(err)
+	err = os.WriteFile("gems.locked", []byte("GEM\n  specs:\n"), 0600)
+	if err != nil {
+		t.Fatalf("Failed to write gems.locked: %v", err)
 	}
 
 	paths, err = FindGemfiles()
@@ -69,13 +81,23 @@ func TestFindGemfiles(t *testing.T) {
 func TestFindGemfilesWithBundleGemfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
-	defer os.Chdir(oldWd)
-	os.Chdir(tmpDir)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Logf("Failed to change back to original directory: %v", err)
+		}
+	}()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
 
 	// Create custom Gemfile
 	customPath := filepath.Join(tmpDir, "MyGemfile")
-	os.WriteFile(customPath, []byte("gem 'rails'"), 0644)
-	os.WriteFile(customPath+".lock", []byte("GEM\n  specs:\n"), 0644)
+	if err := os.WriteFile(customPath, []byte("gem 'rails'"), 0600); err != nil {
+		t.Fatalf("Failed to write MyGemfile: %v", err)
+	}
+	if err := os.WriteFile(customPath+".lock", []byte("GEM\n  specs:\n"), 0600); err != nil {
+		t.Fatalf("Failed to write MyGemfile.lock: %v", err)
+	}
 
 	// Set environment variable
 	oldEnv := os.Getenv("BUNDLE_GEMFILE")

@@ -177,7 +177,7 @@ gem 'rails'`,
 			}
 
 			// Run add command
-			err = AddGemCommand(gemfilePath, tt.opts)
+			err = AddGemCommand(gemfilePath, &tt.opts)
 
 			// Check error expectation
 			if tt.expectedErr != "" {
@@ -370,35 +370,45 @@ func TestParseRequire(t *testing.T) {
 func TestFindGemfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldDir, _ := os.Getwd()
-	defer func() { _ = os.Chdir(oldDir) }()
+	defer func() {
+		if err := os.Chdir(oldDir); err != nil {
+			t.Logf("Failed to change back to original directory: %v", err)
+		}
+	}()
 
 	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to change to temp directory: %v", err)
 	}
 
 	// Test default when no files exist
 	result := findGemfile()
-	if result != "Gemfile" {
-		t.Fatalf("Expected 'Gemfile' but got %q", result)
+	if result != GemfileFilename {
+		t.Fatalf("Expected %q but got %q", GemfileFilename, result)
 	}
 
 	// Test Gemfile found
-	_ = os.WriteFile("Gemfile", []byte("# test"), 0600)
+	if err := os.WriteFile(GemfileFilename, []byte("# test"), 0600); err != nil {
+		t.Fatalf("Failed to write Gemfile: %v", err)
+	}
 	result = findGemfile()
-	if result != "Gemfile" {
-		t.Fatalf("Expected 'Gemfile' but got %q", result)
+	if result != GemfileFilename {
+		t.Fatalf("Expected %q but got %q", GemfileFilename, result)
 	}
 
 	// Test gems.rb found when Gemfile doesn't exist
-	os.Remove("Gemfile")
-	_ = os.WriteFile("gems.rb", []byte("# test"), 0600)
+	os.Remove(GemfileFilename)
+	if err := os.WriteFile(GemsRbFilename, []byte("# test"), 0600); err != nil {
+		t.Fatalf("Failed to write gems.rb: %v", err)
+	}
 	result = findGemfile()
-	if result != "gems.rb" {
-		t.Fatalf("Expected 'gems.rb' but got %q", result)
+	if result != GemsRbFilename {
+		t.Fatalf("Expected %q but got %q", GemsRbFilename, result)
 	}
 
 	// Test Gemfile takes precedence over gems.rb
-	_ = os.WriteFile("Gemfile", []byte("# test"), 0600)
+	if err := os.WriteFile(GemfileFilename, []byte("# test"), 0600); err != nil {
+		t.Fatalf("Failed to write Gemfile: %v", err)
+	}
 	result = findGemfile()
 	if result != "Gemfile" {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)

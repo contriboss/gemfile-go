@@ -14,7 +14,19 @@ func main() {
 	fmt.Println("🔍 Gemfile.lock Parser Example")
 	fmt.Println("=" + strings.Repeat("=", 40))
 
-	// You can pass a Gemfile.lock path as an argument
+	// Parse the lockfile
+	lock := parseLockfileFromArgs()
+
+	// Display statistics and analysis
+	displayStatistics(lock)
+	analyzePopularDependencies(lock)
+	displayFunFacts(lock)
+
+	fmt.Println("\n✅ Parsing complete! Happy coding! 🎊")
+}
+
+// parseLockfileFromArgs parses lockfile from command line arguments or default path
+func parseLockfileFromArgs() *lockfile.Lockfile {
 	path := "testdata/Gemfile.lock"
 	if len(os.Args) > 1 {
 		path = os.Args[1]
@@ -25,17 +37,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("❌ Oops! Couldn't parse %s: %v", path, err)
 	}
+	return lock
+}
 
+// displayStatistics shows basic lockfile statistics
+func displayStatistics(lock *lockfile.Lockfile) {
 	fmt.Printf("\n📊 Gemfile.lock Statistics:\n")
 	fmt.Printf("├─ Total gems: %d\n", len(lock.GemSpecs))
 	fmt.Printf("├─ Git gems: %d\n", len(lock.GitSpecs))
 	fmt.Printf("├─ Path gems: %d\n", len(lock.PathSpecs))
 	fmt.Printf("├─ Platforms: %v\n", lock.Platforms)
 	fmt.Printf("└─ Bundled with: %s\n", lock.BundledWith)
+}
 
-	// Find the most popular dependencies
+// analyzePopularDependencies finds and displays most popular dependencies
+func analyzePopularDependencies(lock *lockfile.Lockfile) {
 	depCount := make(map[string]int)
-	for _, gem := range lock.GemSpecs {
+	for i := range lock.GemSpecs {
+		gem := &lock.GemSpecs[i]
 		for _, dep := range gem.Dependencies {
 			depCount[dep.Name]++
 		}
@@ -51,13 +70,24 @@ func main() {
 		fmt.Printf("   %d. %s (used by %d gems)\n", count+1, name, uses)
 		count++
 	}
+}
 
-	// Fun facts!
+// displayFunFacts shows interesting facts about the lockfile
+func displayFunFacts(lock *lockfile.Lockfile) {
 	fmt.Printf("\n🎉 Fun Facts:\n")
 
-	// Count Rails gems
+	displayRailsGems(lock)
+	displayTestFrameworks(lock)
+	displayWebServers(lock)
+	displaySecurityInfo(lock)
+	displayPlatformGems(lock)
+}
+
+// displayRailsGems counts and displays Rails-related gems
+func displayRailsGems(lock *lockfile.Lockfile) {
 	railsGems := 0
-	for _, gem := range lock.GemSpecs {
+	for i := range lock.GemSpecs {
+		gem := &lock.GemSpecs[i]
 		if strings.Contains(gem.Name, "rails") || strings.HasPrefix(gem.Name, "action") || strings.HasPrefix(gem.Name, "active") {
 			railsGems++
 		}
@@ -65,10 +95,13 @@ func main() {
 	if railsGems > 0 {
 		fmt.Printf("   🚂 Found %d Rails-related gems\n", railsGems)
 	}
+}
 
-	// Check for test frameworks
+// displayTestFrameworks identifies and displays test frameworks
+func displayTestFrameworks(lock *lockfile.Lockfile) {
 	testFrameworks := []string{}
-	for _, gem := range lock.GemSpecs {
+	for i := range lock.GemSpecs {
+		gem := &lock.GemSpecs[i]
 		switch gem.Name {
 		case "rspec", "rspec-core":
 			testFrameworks = append(testFrameworks, "RSpec")
@@ -81,9 +114,12 @@ func main() {
 	if len(testFrameworks) > 0 {
 		fmt.Printf("   🧪 Testing with: %s\n", strings.Join(testFrameworks, ", "))
 	}
+}
 
-	// Check for web servers
-	for _, gem := range lock.GemSpecs {
+// displayWebServers identifies and displays web servers
+func displayWebServers(lock *lockfile.Lockfile) {
+	for i := range lock.GemSpecs {
+		gem := &lock.GemSpecs[i]
 		switch gem.Name {
 		case "puma":
 			fmt.Println("   🐆 Puma server detected - Fast & concurrent!")
@@ -95,19 +131,25 @@ func main() {
 			fmt.Println("   🚊 Passenger detected - Enterprise ready!")
 		}
 	}
+}
 
-	// Security check
+// displaySecurityInfo shows security-related information
+func displaySecurityInfo(lock *lockfile.Lockfile) {
 	gemsWithChecksum := 0
-	for _, gem := range lock.GemSpecs {
+	for i := range lock.GemSpecs {
+		gem := &lock.GemSpecs[i]
 		if gem.Checksum != "" {
 			gemsWithChecksum++
 		}
 	}
 	fmt.Printf("   🔒 %d/%d gems have security checksums\n", gemsWithChecksum, len(lock.GemSpecs))
+}
 
-	// Platform-specific gems
+// displayPlatformGems shows platform-specific gem information
+func displayPlatformGems(lock *lockfile.Lockfile) {
 	platformGems := 0
-	for _, gem := range lock.GemSpecs {
+	for i := range lock.GemSpecs {
+		gem := &lock.GemSpecs[i]
 		if gem.Platform != "" && gem.Platform != "ruby" {
 			platformGems++
 		}
@@ -115,6 +157,4 @@ func main() {
 	if platformGems > 0 {
 		fmt.Printf("   💻 %d platform-specific gems found\n", platformGems)
 	}
-
-	fmt.Println("\n✅ Parsing complete! Happy coding! 🎊")
 }

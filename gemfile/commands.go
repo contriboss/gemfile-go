@@ -31,7 +31,7 @@ type RemoveOptions struct {
 }
 
 // AddGemCommand handles the ore add command
-func AddGemCommand(gemfilePath string, opts AddOptions) error {
+func AddGemCommand(gemfilePath string, opts *AddOptions) error {
 	// Validate gem name
 	if opts.Name == "" {
 		return fmt.Errorf("gem name is required")
@@ -43,7 +43,7 @@ func AddGemCommand(gemfilePath string, opts AddOptions) error {
 	}
 
 	if _, err := os.Stat(gemfilePath); os.IsNotExist(err) {
-		return fmt.Errorf("gemfile not found, use 'ore init' to create one")
+		return fmt.Errorf("gemfile not found. Use 'ore init' to create one")
 	}
 
 	// Build dependency
@@ -83,7 +83,7 @@ func AddGemCommand(gemfilePath string, opts AddOptions) error {
 		}
 	} else if opts.Path != "" {
 		dep.Source = &Source{
-			Type: "path",
+			Type: PathStr,
 			URL:  opts.Path,
 		}
 	} else if opts.Source != "" {
@@ -99,7 +99,7 @@ func AddGemCommand(gemfilePath string, opts AddOptions) error {
 	}
 
 	// Add gem to Gemfile
-	if err := AddGemToFile(gemfilePath, dep); err != nil {
+	if err := AddGemToFile(gemfilePath, &dep); err != nil {
 		return fmt.Errorf("failed to add gem to Gemfile: %w", err)
 	}
 
@@ -142,7 +142,7 @@ func findGemfile() string {
 		}
 	}
 
-	return "Gemfile" // default
+	return GemfileFilename // default
 }
 
 // ParseGroups parses a comma-separated group string
@@ -165,7 +165,7 @@ func ParseRequire(requireStr string) *string {
 		return nil
 	}
 
-	if requireStr == "false" {
+	if requireStr == FalseStr {
 		empty := ""
 		return &empty
 	}

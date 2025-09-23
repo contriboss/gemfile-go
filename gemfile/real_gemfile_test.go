@@ -38,49 +38,15 @@ func TestRealGemfile(t *testing.T) {
 	}
 
 	for _, expected := range expectedGems {
-		if !foundGems[expected.name] {
-			t.Errorf("Expected gem %s not found", expected.name)
-			continue
-		}
-
-		gem := findGem(parsed.Dependencies, expected.name)
-		if gem == nil {
-			continue
-		}
-
-		// Check constraints
-		if len(gem.Constraints) != len(expected.constraints) {
-			t.Errorf("Gem %s: expected %d constraints, got %d (%v)",
-				expected.name, len(expected.constraints), len(gem.Constraints), gem.Constraints)
-		} else {
-			for i, constraint := range expected.constraints {
-				if gem.Constraints[i] != constraint {
-					t.Errorf("Gem %s: expected constraint %s, got %s",
-						expected.name, constraint, gem.Constraints[i])
-				}
-			}
-		}
-
-		// Check source type
-		if expected.sourceType != "" {
-			if gem.Source == nil {
-				t.Errorf("Gem %s: expected source type %s, got nil",
-					expected.name, expected.sourceType)
-			} else if gem.Source.Type != expected.sourceType {
-				t.Errorf("Gem %s: expected source type %s, got %s",
-					expected.name, expected.sourceType, gem.Source.Type)
-			}
-		}
+		validateExpectedGem(t, parsed.Dependencies, foundGems, expected)
 	}
 
 	// Check sources
 	if len(parsed.Sources) < 1 {
 		t.Error("Expected at least 1 source")
-	} else {
+	} else if parsed.Sources[0].URL != RubygemsURL {
 		// Should have rubygems.org as first source
-		if parsed.Sources[0].URL != "https://rubygems.org" {
-			t.Errorf("Expected first source to be rubygems.org, got %s", parsed.Sources[0].URL)
-		}
+		t.Errorf("Expected first source to be rubygems.org, got %s", parsed.Sources[0].URL)
 	}
 
 	// Log some examples for debugging
@@ -91,5 +57,62 @@ func TestRealGemfile(t *testing.T) {
 		}
 		t.Logf("  %s %v (groups: %v, source: %v)",
 			dep.Name, dep.Constraints, dep.Groups, dep.Source)
+	}
+}
+
+// validateExpectedGem validates a single expected gem against parsed dependencies
+func validateExpectedGem(t *testing.T, deps []GemDependency, foundGems map[string]bool, expected struct {
+	name        string
+	constraints []string
+	sourceType  string
+}) {
+	if !foundGems[expected.name] {
+		t.Errorf("Expected gem %s not found", expected.name)
+		return
+	}
+
+	gem := findGem(deps, expected.name)
+	if gem == nil {
+		return
+	}
+
+	validateConstraints(t, gem, expected)
+	validateSourceType(t, gem, expected)
+}
+
+// validateConstraints validates gem constraints
+func validateConstraints(t *testing.T, gem *GemDependency, expected struct {
+	name        string
+	constraints []string
+	sourceType  string
+}) {
+	if len(gem.Constraints) != len(expected.constraints) {
+		t.Errorf("Gem %s: expected %d constraints, got %d (%v)",
+			expected.name, len(expected.constraints), len(gem.Constraints), gem.Constraints)
+		return
+	}
+
+	for i, constraint := range expected.constraints {
+		if gem.Constraints[i] != constraint {
+			t.Errorf("Gem %s: expected constraint %s, got %s",
+				expected.name, constraint, gem.Constraints[i])
+		}
+	}
+}
+
+// validateSourceType validates gem source type
+func validateSourceType(t *testing.T, gem *GemDependency, expected struct {
+	name        string
+	constraints []string
+	sourceType  string
+}) {
+	if expected.sourceType != "" {
+		if gem.Source == nil {
+			t.Errorf("Gem %s: expected source type %s, got nil",
+				expected.name, expected.sourceType)
+		} else if gem.Source.Type != expected.sourceType {
+			t.Errorf("Gem %s: expected source type %s, got %s",
+				expected.name, expected.sourceType, gem.Source.Type)
+		}
 	}
 }

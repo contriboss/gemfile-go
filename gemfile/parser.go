@@ -306,7 +306,7 @@ func (p *GemfileParser) extractSource(line string) *Source {
 		matches := pathRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			return &Source{
-				Type: "path",
+				Type: PathStr,
 				URL:  matches[1],
 			}
 		}
@@ -322,7 +322,7 @@ func (p *GemfileParser) extractRequire(line string) *string {
 		matches := requireRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			require := matches[1]
-			if require == "false" {
+			if require == FalseStr {
 				require = ""
 			} else {
 				// Remove quotes
@@ -369,7 +369,7 @@ func (p *GemfileParser) parseRubyVersion(line string) string {
 }
 
 // parseVariable parses variable assignments like: rails_version = '~> 8.0.1'
-func (p *GemfileParser) parseVariable(line string) (string, string) {
+func (p *GemfileParser) parseVariable(line string) (name, value string) {
 	re := regexp.MustCompile(`^(\w+)\s*=\s*['"]([^'"]+)['"]`)
 	matches := re.FindStringSubmatch(line)
 	if len(matches) >= 3 {

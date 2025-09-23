@@ -119,7 +119,7 @@ gem 'rails'`,
 				Name:   "local_gem",
 				Groups: []string{"default"},
 				Source: &Source{
-					Type: "path",
+					Type: PathStr,
 					URL:  "./vendor/local_gem",
 				},
 			},
@@ -163,14 +163,14 @@ gem 'rails'`,
 			gemfilePath := filepath.Join(tmpDir, "Gemfile")
 
 			// Write initial content
-			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0644)
+			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0600)
 			if err != nil {
 				t.Fatalf("Failed to write initial Gemfile: %v", err)
 			}
 
 			// Create writer and add gem
 			writer := NewGemfileWriter(gemfilePath)
-			err = writer.AddGem(tt.gem)
+			err = writer.AddGem(&tt.gem)
 
 			// Check error expectation
 			if tt.expectedErr != "" {
@@ -259,7 +259,7 @@ gem 'rails'`,
 			gemfilePath := filepath.Join(tmpDir, "Gemfile")
 
 			// Write initial content
-			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0644)
+			err := os.WriteFile(gemfilePath, []byte(tt.initialGemfile), 0600)
 			if err != nil {
 				t.Fatalf("Failed to write initial Gemfile: %v", err)
 			}

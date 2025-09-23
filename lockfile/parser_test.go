@@ -61,10 +61,8 @@ BUNDLED WITH
 	nokogiri := findGem(lockfile.GemSpecs, "nokogiri")
 	if nokogiri == nil {
 		t.Error("nokogiri gem not found")
-	} else {
-		if nokogiri.Platform != "x86_64-darwin" {
-			t.Errorf("Expected nokogiri platform x86_64-darwin, got %s", nokogiri.Platform)
-		}
+	} else if nokogiri.Platform != "x86_64-darwin" {
+		t.Errorf("Expected nokogiri platform x86_64-darwin, got %s", nokogiri.Platform)
 	}
 
 	// Test platforms
@@ -112,7 +110,7 @@ func TestParseGitLockfile(t *testing.T) {
 	}
 
 	second := lockfile.GitSpecs[1]
-	if second.Name != "state_machines" || second.Branch != "master" {
+	if second.Name != StateMachinesGem || second.Branch != "master" {
 		t.Errorf("unexpected second git gem: %+v", second)
 	}
 
@@ -154,13 +152,13 @@ func TestParsePlatformsLockfile(t *testing.T) {
 
 func TestFilterGemsByGroups(t *testing.T) {
 	gems := []GemSpec{
-		{Name: "rails", Groups: []string{"default", "production"}},
+		{Name: RailsGem, Groups: []string{"default", "production"}},
 		{Name: "rubocop", Groups: []string{"development"}},
 		{Name: "rspec", Groups: []string{"test"}},
 	}
 
 	filtered := FilterGemsByGroups(gems, []string{"production"}, nil)
-	if len(filtered) != 1 || filtered[0].Name != "rails" {
+	if len(filtered) != 1 || filtered[0].Name != RailsGem {
 		t.Errorf("--only production failed: %v", filtered)
 	}
 
@@ -170,7 +168,7 @@ func TestFilterGemsByGroups(t *testing.T) {
 	}
 
 	filtered = FilterGemsByGroups(gems, []string{"production"}, []string{"development"})
-	if len(filtered) != 1 || filtered[0].Name != "rails" {
+	if len(filtered) != 1 || filtered[0].Name != RailsGem {
 		t.Errorf("combined only/without failed: %v", filtered)
 	}
 }
@@ -284,8 +282,20 @@ BUNDLED WITH
 		t.Errorf("Expected 3 PATH gems, got %d", len(lockfile.PathSpecs))
 	}
 
-	// Test first PATH gem
-	cms := lockfile.PathSpecs[0]
+	// Test individual PATH gems
+	testFirstPathGem(t, &lockfile.PathSpecs[0])
+	testSecondPathGem(t, &lockfile.PathSpecs[1])
+	testThirdPathGem(t, &lockfile.PathSpecs[2])
+
+	// Test that Git gems are still parsed correctly alongside PATH gems
+	testGitGemsStillWork(t, lockfile)
+
+	// Test semantic versioning
+	testSemVerParsing(t, lockfile.PathSpecs)
+}
+
+// testFirstPathGem tests the first PATH gem (commonshare_cms)
+func testFirstPathGem(t *testing.T, cms *PathGemSpec) {
 	if cms.Name != "commonshare_cms" {
 		t.Errorf("Expected first PATH gem name 'commonshare_cms', got '%s'", cms.Name)
 	}
@@ -298,13 +308,14 @@ BUNDLED WITH
 	if len(cms.Dependencies) != 7 {
 		t.Errorf("Expected 7 dependencies for commonshare_cms, got %d", len(cms.Dependencies))
 	}
+}
 
-	// Test second PATH gem
-	insight := lockfile.PathSpecs[1]
+// testSecondPathGem tests the second PATH gem (common_insight)
+func testSecondPathGem(t *testing.T, insight *PathGemSpec) {
 	if insight.Name != "common_insight" {
 		t.Errorf("Expected second PATH gem name 'common_insight', got '%s'", insight.Name)
 	}
-	if insight.Version != "0.1.0" {
+	if insight.Version != VersionStr {
 		t.Errorf("Expected second PATH gem version '0.1.0', got '%s'", insight.Version)
 	}
 	if insight.Remote != "components/common_insight" {
@@ -313,13 +324,14 @@ BUNDLED WITH
 	if len(insight.Dependencies) != 4 {
 		t.Errorf("Expected 4 dependencies for common_insight, got %d", len(insight.Dependencies))
 	}
+}
 
-	// Test third PATH gem
-	frontend := lockfile.PathSpecs[2]
+// testThirdPathGem tests the third PATH gem (frontend_link)
+func testThirdPathGem(t *testing.T, frontend *PathGemSpec) {
 	if frontend.Name != "frontend_link" {
 		t.Errorf("Expected third PATH gem name 'frontend_link', got '%s'", frontend.Name)
 	}
-	if frontend.Version != "0.1.0" {
+	if frontend.Version != VersionStr {
 		t.Errorf("Expected third PATH gem version '0.1.0', got '%s'", frontend.Version)
 	}
 	if frontend.Remote != "components/frontend_link" {
@@ -328,14 +340,17 @@ BUNDLED WITH
 	if len(frontend.Dependencies) != 2 {
 		t.Errorf("Expected 2 dependencies for frontend_link, got %d", len(frontend.Dependencies))
 	}
+}
 
-	// Test that Git gems are still parsed correctly alongside PATH gems
+// testGitGemsStillWork tests that Git gems work alongside PATH gems
+func testGitGemsStillWork(t *testing.T, lockfile *Lockfile) {
 	if len(lockfile.GitSpecs) != 1 {
 		t.Errorf("Expected 1 Git gem, got %d", len(lockfile.GitSpecs))
+		return
 	}
 
 	git := lockfile.GitSpecs[0]
-	if git.Name != "state_machines" {
+	if git.Name != StateMachinesGem {
 		t.Errorf("Expected Git gem name 'state_machines', got '%s'", git.Name)
 	}
 
@@ -343,23 +358,21 @@ BUNDLED WITH
 	if len(lockfile.GemSpecs) != 2 {
 		t.Errorf("Expected 2 regular gems, got %d", len(lockfile.GemSpecs))
 	}
+}
 
-	// Test PATH gem conversion methods
+// testSemVerParsing tests semantic version parsing for PATH gems
+func testSemVerParsing(t *testing.T, pathSpecs []PathGemSpec) {
+	if len(pathSpecs) == 0 {
+		return
+	}
+
+	cms := pathSpecs[0]
 	if cms.FullName() != "commonshare_cms-0.6.1" {
 		t.Errorf("Expected FullName 'commonshare_cms-0.6.1', got '%s'", cms.FullName())
 	}
 
-	_, err = cms.SemVer()
+	_, err := cms.SemVer()
 	if err != nil {
 		t.Errorf("PATH gem SemVer parsing failed: %v", err)
 	}
-}
-
-func findPathGem(pathGems []PathGemSpec, name string) *PathGemSpec {
-	for i := range pathGems {
-		if pathGems[i].Name == name {
-			return &pathGems[i]
-		}
-	}
-	return nil
 }
