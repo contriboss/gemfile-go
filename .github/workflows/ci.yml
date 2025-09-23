@@ -60,34 +60,6 @@ jobs:
     - name: Run linting
       run: mage lint
 
-  benchmark:
-    name: Benchmark
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Setup Go
-      uses: actions/setup-go@v6
-      with:
-        go-version: '1.25'
-
-    - name: Install Mage
-      run: go install github.com/magefile/mage@latest
-
-    - name: Run benchmarks
-      run: mage bench
-
-    - name: Store benchmark results
-      uses: benchmark-action/github-action-benchmark@v1
-      with:
-        tool: 'go'
-        output-file-path: bench.txt
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        auto-push: false
-        comment-on-alert: true
-
   examples:
     name: Validate Examples
     runs-on: ubuntu-latest

@@ -8,7 +8,6 @@ run:
 linters:
   enable:
     - bodyclose
-    - depguard
     - dogsled
     - dupl
     - errcheck
@@ -20,8 +19,6 @@ linters:
     - gocyclo
     - gofmt
     - goimports
-    - golint
-    - gomnd
     - goprintffuncname
     - gosec
     - gosimple
@@ -34,20 +31,14 @@ linters:
     - nolintlint
     - rowserrcheck
     - staticcheck
-    - structcheck
     - stylecheck
     - typecheck
     - unconvert
     - unparam
     - unused
-    - varcheck
     - whitespace
 
 linters-settings:
-  depguard:
-    list-type: blacklist
-    packages:
-      # No blacklisted packages
   dupl:
     threshold: 100
   exhaustive:
@@ -75,12 +66,6 @@ linters-settings:
     min-complexity: 15
   goimports:
     local-prefixes: github.com/contriboss/gemfile-go
-  golint:
-    min-confidence: 0
-  gomnd:
-    settings:
-      mnd:
-        checks: argument,case,condition,operation,return,assign
   govet:
     check-shadowing: true
   lll:
@@ -97,12 +82,10 @@ issues:
   exclude-rules:
     - path: _test\.go
       linters:
-        - gomnd
         - funlen
         - dupl
 
     - path: examples/
       linters:
-        - gomnd
         - goconst
         - funlen
