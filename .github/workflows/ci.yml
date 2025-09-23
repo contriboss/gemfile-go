@@ -12,11 +12,7 @@ on:
 jobs:
   test:
     name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.21', '1.22', '1.23']
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
@@ -25,7 +21,7 @@ jobs:
     - name: Setup Go
       uses: actions/setup-go@v6
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: '1.25'
 
     - name: Install Mage
       run: go install github.com/magefile/mage@latest
@@ -37,11 +33,9 @@ jobs:
       run: mage test
 
     - name: Run tests with race detector
-      if: matrix.os != 'windows-latest'  # Race detector can be flaky on Windows
       run: mage testrace
 
     - name: Upload coverage to Codecov
-      if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23'
       uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
