@@ -132,8 +132,8 @@ func TestParsePlatformsLockfile(t *testing.T) {
 		t.Fatalf("Failed to parse lockfile: %v", err)
 	}
 
-	if len(lockfile.Platforms) != 2 {
-		t.Fatalf("expected 2 platforms, got %d", len(lockfile.Platforms))
+	if len(lockfile.Platforms) != 3 {
+		t.Fatalf("expected 3 platforms, got %d", len(lockfile.Platforms))
 	}
 
 	nDarwin := findGem(lockfile.GemSpecs, "nokogiri")
@@ -147,7 +147,7 @@ func TestParsePlatformsLockfile(t *testing.T) {
 			platforms[gem.Platform] = true
 		}
 	}
-	if !platforms["x86_64-darwin"] || !platforms["x86_64-linux-gnu"] {
+	if !platforms["arm64-darwin"] || !platforms["x86_64-linux"] {
 		t.Errorf("expected both darwin and linux variants, got %v", platforms)
 	}
 }
@@ -207,8 +207,8 @@ func TestParseBundler2File(t *testing.T) {
 		t.Fatalf("parse: %v", err)
 	}
 
-	if lf.BundledWith != "2.6.9" {
-		t.Errorf("expected bundler 2.6.9, got %s", lf.BundledWith)
+	if lf.BundledWith != "2.4.13" {
+		t.Errorf("expected bundler 2.4.13, got %s", lf.BundledWith)
 	}
 	if len(lf.GemSpecs) == 0 {
 		t.Errorf("expected gems parsed")

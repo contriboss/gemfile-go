@@ -5,9 +5,9 @@ import (
 )
 
 func TestRealGemfile(t *testing.T) {
-	// Test with the actual Gemfile from test-large-project
-	gemfilePath := "/Users/seuros/Projects/ore/test-large-project/Gemfile"
-	
+	// Test with the actual Gemfile from examples/benchmark
+	gemfilePath := "../examples/benchmark/Gemfile"
+
 	parser := NewGemfileParser(gemfilePath)
 	parsed, err := parser.Parse()
 	if err != nil {
@@ -23,14 +23,13 @@ func TestRealGemfile(t *testing.T) {
 		constraints []string
 		sourceType  string
 	}{
-		{"falcon", []string{}, ""},
-		{"actionmailer", []string{"~> 8.0.1"}, ""},
-		{"activerecord-ulid", []string{"~> 0.1.0"}, ""},
-		{"foreman", []string{">= 0.85.0"}, ""},
-		{"shoulda", []string{"4.0.0"}, ""},
-		{"state_machines", []string{}, "git"},
-		{"commonshare_cms", []string{}, "path"},
-		{"matrix", []string{"~> 0.4.2"}, ""},
+		{"railties", []string{"8.1.0.beta1"}, ""},
+		{"activerecord", []string{"8.1.0.beta1"}, ""},
+		{"no_fly_list", []string{}, ""},
+		{"lapsoss", []string{}, ""},
+		{"state_machines", []string{}, ""},
+		{"capistrano-puma", []string{}, ""},
+		{"minitest-reporters-llm", []string{}, ""},
 	}
 
 	foundGems := make(map[string]bool)
@@ -51,7 +50,7 @@ func TestRealGemfile(t *testing.T) {
 
 		// Check constraints
 		if len(gem.Constraints) != len(expected.constraints) {
-			t.Errorf("Gem %s: expected %d constraints, got %d (%v)", 
+			t.Errorf("Gem %s: expected %d constraints, got %d (%v)",
 				expected.name, len(expected.constraints), len(gem.Constraints), gem.Constraints)
 		} else {
 			for i, constraint := range expected.constraints {
@@ -90,7 +89,7 @@ func TestRealGemfile(t *testing.T) {
 		if i >= 5 {
 			break
 		}
-		t.Logf("  %s %v (groups: %v, source: %v)", 
+		t.Logf("  %s %v (groups: %v, source: %v)",
 			dep.Name, dep.Constraints, dep.Groups, dep.Source)
 	}
 }

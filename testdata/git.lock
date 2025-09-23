@@ -1,42 +1,45 @@
 GIT
-  remote: https://github.com/rails/rails.git
-  revision: 2f7572b6f176e67fe8ec01d2871d66cb2302e687
-  branch: main
+  remote: https://github.com/seuros/no_fly_list.git
+  revision: abc123def456
+  tag: v0.6.0
   specs:
-    actionpack (7.1.0.alpha)
-      actionview (= 7.1.0.alpha)
-      activesupport (= 7.1.0.alpha)
-    actionview (7.1.0.alpha)
-      activesupport (= 7.1.0.alpha)
+    no_fly_list (0.6.0)
+      activerecord (>= 6.0)
+      activesupport (>= 6.0)
 
 GIT
-  remote: https://github.com/ruby/debug.git
-  revision: a1b2c3d4e5f6
+  remote: https://github.com/seuros/state_machines.git
+  revision: def456abc789
+  branch: master
   specs:
-    debug (1.8.0)
-      irb (>= 1.5.0)
-      reline (>= 0.3.1)
+    state_machines (0.6.0)
 
 GEM
   remote: https://rubygems.org/
   specs:
-    activesupport (7.1.0.alpha)
+    activemodel (7.0.4)
+      activesupport (= 7.0.4)
+    activerecord (7.0.4)
+      activemodel (= 7.0.4)
+      activesupport (= 7.0.4)
+    activesupport (7.0.4)
       concurrent-ruby (~> 1.0, >= 1.0.2)
       i18n (>= 1.6, < 2)
+      minitest (>= 5.1)
+      tzinfo (~> 2.0)
     concurrent-ruby (1.2.2)
     i18n (1.14.1)
       concurrent-ruby (~> 1.0)
-    irb (1.7.4)
-      reline (>= 0.3.6)
-    reline (0.3.7)
-      io-console (~> 0.5)
+    minitest (5.19.0)
+    tzinfo (2.0.6)
+      concurrent-ruby (~> 1.0)
 
 PLATFORMS
-  ruby
+  x86_64-linux
 
 DEPENDENCIES
-  actionpack!
-  debug!
+  no_fly_list!
+  state_machines!
 
 BUNDLED WITH
    2.4.13
