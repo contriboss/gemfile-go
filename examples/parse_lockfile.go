@@ -20,7 +20,7 @@ func main() {
 		path = os.Args[1]
 	}
 
-	// Parse the lockfile (like Bundler.locked_gems in Ruby!)
+	// Parse the lockfile
 	lock, err := lockfile.ParseFile(path)
 	if err != nil {
 		log.Fatalf("❌ Oops! Couldn't parse %s: %v", path, err)

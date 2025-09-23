@@ -1,19 +1,7 @@
 // Package lockfile provides a pure Go parser for Ruby's Gemfile.lock format.
+// It parses the Bundler lockfile format without requiring Ruby.
 //
-// This package is designed for Ruby developers learning Go or Go developers
-// working with Ruby projects. It parses the Bundler lockfile format to extract
-// dependency information without requiring Ruby to be installed.
-//
-// Fun fact: Did you know that Gemfile.lock uses a custom format that's almost
-// YAML but not quite? It's like YAML's quirky cousin who shows up at family
-// gatherings with their own unique style! 🎭
-//
-// Example usage:
-//   lockfile, err := ParseFile("Gemfile.lock")
-//   if err != nil {
-//       log.Fatal(err)
-//   }
-//   fmt.Printf("Found %d gems\n", len(lockfile.GemSpecs))
+// Ruby equivalent: Bundler.locked_gems
 package lockfile
 
 import (
@@ -28,39 +16,18 @@ import (
 )
 
 // Lockfile represents a parsed Gemfile.lock file.
-// In Ruby world, this is your project's "frozen" dependency snapshot.
-// Think of it as a time capsule of exact gem versions that worked together! 💎
 type Lockfile struct {
-	// GemSpecs contains all gems from the GEM section
-	// These are your regular gems from rubygems.org
-	GemSpecs     []GemSpec
-
-	// GitSpecs contains gems installed from git repositories
-	// For when you're living on the edge with unreleased features!
-	GitSpecs     []GitGemSpec
-
-	// PathSpecs contains gems installed from local paths
-	// Perfect for developing multiple gems simultaneously
-	PathSpecs    []PathGemSpec
-
-	// Platforms lists all platforms this lockfile supports
-	// e.g., "ruby", "x86_64-linux", "arm64-darwin"
-	Platforms    []string
-
-	// Dependencies are the top-level gems your app directly depends on
-	// These come from your Gemfile
-	Dependencies []Dependency
-
-	// BundledWith shows which Bundler version created this lockfile
-	// Important for compatibility!
-	BundledWith  string
-
-	// Groups maps group names to gem names (e.g., "development" -> ["rspec", "pry"])
-	Groups       map[string][]string
+	GemSpecs     []GemSpec              // Gems from the GEM section
+	GitSpecs     []GitGemSpec           // Gems from git repositories
+	PathSpecs    []PathGemSpec          // Gems from local paths
+	Platforms    []string               // Supported platforms (e.g., "ruby", "x86_64-linux")
+	Dependencies []Dependency           // Top-level dependencies from Gemfile
+	BundledWith  string                 // Bundler version used
+	Groups       map[string][]string    // Group name to gem names mapping
 }
 
 // FindGem searches for a gem by name in the lockfile.
-// Returns nil if not found. This is like `bundle show gemname`.
+// Ruby equivalent: Bundler.locked_gems.specs.find {|s| s.name == name}
 func (l *Lockfile) FindGem(name string) *GemSpec {
 	for i := range l.GemSpecs {
 		if l.GemSpecs[i].Name == name {
@@ -71,29 +38,14 @@ func (l *Lockfile) FindGem(name string) *GemSpec {
 }
 
 // GemSpec represents a single gem in the lockfile.
-// For Ruby devs: This is like `gem.specification` but flattened and simplified.
-// For Go devs: This is similar to a go.mod module entry with extra metadata.
+// Ruby equivalent: Bundler::LazySpecification
 type GemSpec struct {
-	// Name is the gem name (e.g., "rails", "puma", "sidekiq")
-	Name         string
-
-	// Version is the exact version locked (e.g., "7.0.4")
-	// In Ruby: Gem::Version.new("7.0.4")
-	Version      string
-
-	// Platform specifies architecture if not "ruby" (e.g., "java", "x86_64-linux")
-	// Empty string means it works on all platforms (pure Ruby)
-	Platform     string
-
-	// Dependencies this gem needs to work (runtime dependencies)
-	Dependencies []Dependency
-
-	// Groups this gem belongs to (e.g., ["default", "development"])
-	Groups       []string
-
-	// Checksum is the SHA256 hash for security verification
-	// Prevents sneaky gem swapping! 🔒
-	Checksum     string
+	Name         string       // Gem name
+	Version      string       // Exact version locked
+	Platform     string       // Platform restriction (empty for pure Ruby)
+	Dependencies []Dependency // Runtime dependencies
+	Groups       []string     // Groups this gem belongs to
+	Checksum     string       // SHA256 for integrity verification
 	// Security and metadata
 	SourceURL        string            `json:"source_url,omitempty"`
 	PostInstallMessage string          `json:"post_install_message,omitempty"`
@@ -159,9 +111,7 @@ var (
 	depRegex     = regexp.MustCompile(`^      ([a-zA-Z0-9\-_]+)(?: \(([^)]+)\))?$`)
 )
 
-// ParseFile is a convenience function to parse a Gemfile.lock from a file path.
-// This is what most Ruby developers will use:
-//   lock, err := lockfile.ParseFile("Gemfile.lock")
+// ParseFile parses a Gemfile.lock from a file path.
 func ParseFile(path string) (*Lockfile, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -173,7 +123,6 @@ func ParseFile(path string) (*Lockfile, error) {
 }
 
 // Parse reads and parses a Gemfile.lock from an io.Reader.
-// For advanced users who want to parse from memory or network streams.
 func Parse(reader io.Reader) (*Lockfile, error) {
 	lockfile := &Lockfile{
 		Groups: make(map[string][]string),

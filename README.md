@@ -6,7 +6,7 @@
 [![Go Reference](https://pkg.go.dev/badge/github.com/contriboss/gemfile-go.svg)](https://pkg.go.dev/github.com/contriboss/gemfile-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/contriboss/gemfile-go)](https://goreportcard.com/report/github.com/contriboss/gemfile-go)
 
-## 🎯 What's This?
+## Overview
 
 Ever wanted to parse Ruby's Gemfile.lock from Go? Maybe you're building developer tools, analyzing dependencies, or just curious about what's in that lockfile. This library lets you do it all without having Ruby installed!
 

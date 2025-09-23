@@ -1,21 +1,7 @@
 // Package gemfile provides a parser for Ruby's Gemfile format.
+// It parses the Bundler DSL without evaluating Ruby code.
 //
-// This package helps Go developers work with Ruby projects by parsing
-// Gemfiles to understand dependencies, versions, and sources.
-//
-// Fun fact: Gemfiles are actually Ruby code! They use a DSL (Domain Specific
-// Language) that makes declaring dependencies feel natural. This parser
-// understands that DSL without evaluating Ruby code. Magic! ✨
-//
-// Example:
-//   parser := gemfile.NewGemfileParser("Gemfile")
-//   parsed, err := parser.Parse()
-//   if err != nil {
-//       log.Fatal(err)
-//   }
-//   for _, dep := range parsed.Dependencies {
-//       fmt.Printf("Gem: %s %v\n", dep.Name, dep.Constraints)
-//   }
+// Ruby equivalent: Bundler::Definition
 package gemfile
 
 import (
@@ -27,55 +13,29 @@ import (
 )
 
 // GemfileParser parses Gemfile syntax into structured data.
-// For Ruby devs: This is like Bundler::Dsl but for Go!
-// For Go devs: This parses Ruby's dependency declaration file.
+// Ruby equivalent: Bundler::Dsl
 type GemfileParser struct {
 	filepath string
 	content  string
 }
 
 // ParsedGemfile represents the parsed Gemfile content.
-// This is what you get after parsing - all the gems, sources, and metadata!
 type ParsedGemfile struct {
-	// Dependencies are all the gems declared (gem "rails", "~> 7.0")
-	Dependencies []GemDependency
-
-	// Sources are where to find gems (source "https://rubygems.org")
-	Sources      []Source
-
-	// RubyVersion from `ruby "3.0.0"` declaration
-	RubyVersion  string
-
-	// GitSources maps gem names to git URLs
-	GitSources   map[string]string
+	Dependencies []GemDependency   // Declared gems
+	Sources      []Source          // Gem sources
+	RubyVersion  string            // Ruby version requirement
+	GitSources   map[string]string // Gem name to git URL mapping
 }
 
 // GemDependency represents a gem dependency.
-// In Ruby: gem "rails", "~> 7.0", group: [:development, :test]
-// Each gem in your Gemfile becomes one of these.
+// Ruby equivalent: gem "name", "version", options
 type GemDependency struct {
-	// Name is the gem name (e.g., "rails", "puma", "rspec")
-	Name        string
-
-	// Constraints are version requirements
-	// Ruby's "~> 2.0" (pessimistic operator) means >= 2.0.0 and < 3.0.0
-	// Multiple constraints are ANDed together
-	Constraints []string
-
-	// Source is where this specific gem comes from (git, path, or nil for default)
-	Source      *Source
-
-	// Groups this gem belongs to (development, test, production)
-	// Empty means :default group
-	Groups      []string
-
-	// Require controls what gets required
-	// nil = normal require, "false" = don't auto-require, "other" = require "other"
-	Require     *string
-
-	// Comment preserves any inline comments for context
-	// Because comments can be documentation! 📝
-	Comment     string
+	Name        string   // Gem name
+	Constraints []string // Version constraints (e.g., "~> 2.0" means >= 2.0.0 and < 3.0.0)
+	Source      *Source  // Git, path, or nil for default source
+	Groups      []string // Groups (empty means :default)
+	Require     *string  // Require behavior (nil = normal, "false" = no auto-require)
+	Comment     string   // Inline comment if present
 }
 
 // Source represents a gem source (RubyGems, Git, Path)
