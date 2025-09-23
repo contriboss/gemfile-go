@@ -1,0 +1,15 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    rack (1.6.13)
+    rake (10.5.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  rack (~> 1.6)
+  rake (~> 10.0)
+
+BUNDLED WITH
+   1.17.3

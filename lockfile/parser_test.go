@@ -92,7 +92,7 @@ func findGem(gems []GemSpec, name string) *GemSpec {
 	return nil
 }
 func TestParseGitLockfile(t *testing.T) {
-	data, err := os.ReadFile("../../testdata/git.lock")
+	data, err := os.ReadFile("../testdata/git.lock")
 	if err != nil {
 		t.Fatalf("failed to read fixture: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestParseGitLockfile(t *testing.T) {
 }
 
 func TestParsePlatformsLockfile(t *testing.T) {
-	data, err := os.ReadFile("../../testdata/platforms.lock")
+	data, err := os.ReadFile("../testdata/platforms.lock")
 	if err != nil {
 		t.Fatalf("failed to read fixture: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestFilterGemsByGroups(t *testing.T) {
 }
 
 func TestParseBundler1File(t *testing.T) {
-	f, err := os.Open(filepath.Join("..", "..", "testdata", "bundler1.lock"))
+	f, err := os.Open(filepath.Join("..", "testdata", "bundler1.lock"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -196,7 +196,7 @@ func TestParseBundler1File(t *testing.T) {
 }
 
 func TestParseBundler2File(t *testing.T) {
-	f, err := os.Open(filepath.Join("..", "..", "testdata", "bundler2.lock"))
+	f, err := os.Open(filepath.Join("..", "testdata", "bundler2.lock"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -333,7 +333,7 @@ BUNDLED WITH
 	if len(lockfile.GitSpecs) != 1 {
 		t.Errorf("Expected 1 Git gem, got %d", len(lockfile.GitSpecs))
 	}
-	
+
 	git := lockfile.GitSpecs[0]
 	if git.Name != "state_machines" {
 		t.Errorf("Expected Git gem name 'state_machines', got '%s'", git.Name)

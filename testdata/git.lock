@@ -1,0 +1,42 @@
+GIT
+  remote: https://github.com/rails/rails.git
+  revision: 2f7572b6f176e67fe8ec01d2871d66cb2302e687
+  branch: main
+  specs:
+    actionpack (7.1.0.alpha)
+      actionview (= 7.1.0.alpha)
+      activesupport (= 7.1.0.alpha)
+    actionview (7.1.0.alpha)
+      activesupport (= 7.1.0.alpha)
+
+GIT
+  remote: https://github.com/ruby/debug.git
+  revision: a1b2c3d4e5f6
+  specs:
+    debug (1.8.0)
+      irb (>= 1.5.0)
+      reline (>= 0.3.1)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    activesupport (7.1.0.alpha)
+      concurrent-ruby (~> 1.0, >= 1.0.2)
+      i18n (>= 1.6, < 2)
+    concurrent-ruby (1.2.2)
+    i18n (1.14.1)
+      concurrent-ruby (~> 1.0)
+    irb (1.7.4)
+      reline (>= 0.3.6)
+    reline (0.3.7)
+      io-console (~> 0.5)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  actionpack!
+  debug!
+
+BUNDLED WITH
+   2.4.13
