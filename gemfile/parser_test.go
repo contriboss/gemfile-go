@@ -34,7 +34,7 @@ gem 'my_local_gem', path: '../local_gem'
 	// Write to temp file
 	tmpDir := t.TempDir()
 	gemfilePath := filepath.Join(tmpDir, "Gemfile")
-	err := os.WriteFile(gemfilePath, []byte(testGemfile), 0644)
+	err := os.WriteFile(gemfilePath, []byte(testGemfile), 0600)
 	if err != nil {
 		t.Fatalf("Failed to write test Gemfile: %v", err)
 	}
@@ -54,8 +54,8 @@ gem 'my_local_gem', path: '../local_gem'
 		if source.Type != "rubygems" {
 			t.Errorf("Expected source type 'rubygems', got %s", source.Type)
 		}
-		if source.URL != "https://rubygems.org" {
-			t.Errorf("Expected source URL 'https://rubygems.org', got %s", source.URL)
+		if source.URL != rubygemsURL {
+			t.Errorf("Expected source URL '%s', got %s", rubygemsURL, source.URL)
 		}
 	}
 
@@ -118,59 +118,7 @@ gem 'my_local_gem', path: '../local_gem'
 	}
 
 	for _, dep := range parsed.Dependencies {
-		expected, exists := expectedGems[dep.Name]
-		if !exists {
-			t.Errorf("Unexpected gem: %s", dep.Name)
-			continue
-		}
-
-		// Check constraints
-		if len(dep.Constraints) != len(expected.constraints) {
-			t.Errorf("Gem %s: expected %d constraints, got %d",
-				dep.Name, len(expected.constraints), len(dep.Constraints))
-		} else {
-			for i, constraint := range expected.constraints {
-				if dep.Constraints[i] != constraint {
-					t.Errorf("Gem %s: expected constraint %s, got %s",
-						dep.Name, constraint, dep.Constraints[i])
-				}
-			}
-		}
-
-		// Check groups
-		if len(dep.Groups) != len(expected.groups) {
-			t.Errorf("Gem %s: expected %d groups, got %d",
-				dep.Name, len(expected.groups), len(dep.Groups))
-		} else {
-			for i, group := range expected.groups {
-				if dep.Groups[i] != group {
-					t.Errorf("Gem %s: expected group %s, got %s",
-						dep.Name, group, dep.Groups[i])
-				}
-			}
-		}
-
-		// Check source type
-		if expected.sourceType != "" {
-			if dep.Source == nil {
-				t.Errorf("Gem %s: expected source type %s, got nil",
-					dep.Name, expected.sourceType)
-			} else if dep.Source.Type != expected.sourceType {
-				t.Errorf("Gem %s: expected source type %s, got %s",
-					dep.Name, expected.sourceType, dep.Source.Type)
-			}
-		}
-
-		// Check require option
-		if expected.requireVal != nil {
-			if dep.Require == nil {
-				t.Errorf("Gem %s: expected require %s, got nil",
-					dep.Name, *expected.requireVal)
-			} else if *dep.Require != *expected.requireVal {
-				t.Errorf("Gem %s: expected require %s, got %s",
-					dep.Name, *expected.requireVal, *dep.Require)
-			}
-		}
+		checkGemDependency(t, &dep, expectedGems)
 	}
 }
 
@@ -181,7 +129,7 @@ gem 'puma', '~> 5.0'`
 	// Write to temp file
 	tmpDir := t.TempDir()
 	gemfilePath := filepath.Join(tmpDir, "Gemfile")
-	err := os.WriteFile(gemfilePath, []byte(simpleGemfile), 0644)
+	err := os.WriteFile(gemfilePath, []byte(simpleGemfile), 0600)
 	if err != nil {
 		t.Fatalf("Failed to write test Gemfile: %v", err)
 	}
@@ -227,4 +175,65 @@ func findGem(deps []GemDependency, name string) *GemDependency {
 		}
 	}
 	return nil
+}
+
+func checkGemDependency(t *testing.T, dep *GemDependency, expectedGems map[string]struct {
+	constraints []string
+	groups      []string
+	sourceType  string
+	requireVal  *string
+}) {
+	expected, exists := expectedGems[dep.Name]
+	if !exists {
+		t.Errorf("Unexpected gem: %s", dep.Name)
+		return
+	}
+
+	// Check constraints
+	if len(dep.Constraints) != len(expected.constraints) {
+		t.Errorf("Gem %s: expected %d constraints, got %d",
+			dep.Name, len(expected.constraints), len(dep.Constraints))
+	} else {
+		for i, constraint := range expected.constraints {
+			if dep.Constraints[i] != constraint {
+				t.Errorf("Gem %s: expected constraint %s, got %s",
+					dep.Name, constraint, dep.Constraints[i])
+			}
+		}
+	}
+
+	// Check groups
+	if len(dep.Groups) != len(expected.groups) {
+		t.Errorf("Gem %s: expected %d groups, got %d",
+			dep.Name, len(expected.groups), len(dep.Groups))
+	} else {
+		for i, group := range expected.groups {
+			if dep.Groups[i] != group {
+				t.Errorf("Gem %s: expected group %s, got %s",
+					dep.Name, group, dep.Groups[i])
+			}
+		}
+	}
+
+	// Check source type
+	if expected.sourceType != "" {
+		if dep.Source == nil {
+			t.Errorf("Gem %s: expected source type %s, got nil",
+				dep.Name, expected.sourceType)
+		} else if dep.Source.Type != expected.sourceType {
+			t.Errorf("Gem %s: expected source type %s, got %s",
+				dep.Name, expected.sourceType, dep.Source.Type)
+		}
+	}
+
+	// Check require option
+	if expected.requireVal != nil {
+		if dep.Require == nil {
+			t.Errorf("Gem %s: expected require %s, got nil",
+				dep.Name, *expected.requireVal)
+		} else if *dep.Require != *expected.requireVal {
+			t.Errorf("Gem %s: expected require %s, got %s",
+				dep.Name, *expected.requireVal, *dep.Require)
+		}
+	}
 }

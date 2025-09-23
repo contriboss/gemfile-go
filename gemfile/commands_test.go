@@ -177,7 +177,7 @@ gem 'rails'`,
 			}
 
 			// Run add command
-			err = AddGemCommand(gemfilePath, tt.opts)
+			err = AddGemCommand(gemfilePath, &tt.opts)
 
 			// Check error expectation
 			if tt.expectedErr != "" {
@@ -378,14 +378,14 @@ func TestFindGemfile(t *testing.T) {
 
 	// Test default when no files exist
 	result := findGemfile()
-	if result != "Gemfile" {
+	if result != defaultGemfileName {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)
 	}
 
 	// Test Gemfile found
 	_ = os.WriteFile("Gemfile", []byte("# test"), 0600)
 	result = findGemfile()
-	if result != "Gemfile" {
+	if result != defaultGemfileName {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)
 	}
 
@@ -400,7 +400,7 @@ func TestFindGemfile(t *testing.T) {
 	// Test Gemfile takes precedence over gems.rb
 	_ = os.WriteFile("Gemfile", []byte("# test"), 0600)
 	result = findGemfile()
-	if result != "Gemfile" {
+	if result != defaultGemfileName {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)
 	}
 }

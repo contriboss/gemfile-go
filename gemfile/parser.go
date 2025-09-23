@@ -129,7 +129,7 @@ func (p *GemfileParser) parseLine(line string, currentGroups *[]string, result *
 	}
 
 	// Parse end statements
-	if line == "end" {
+	if line == endKeyword {
 		*currentGroups = []string{"default"}
 		return nil
 	}
@@ -322,7 +322,7 @@ func (p *GemfileParser) extractRequire(line string) *string {
 		matches := requireRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			require := matches[1]
-			if require == "false" {
+			if require == falseValue {
 				require = ""
 			} else {
 				// Remove quotes
@@ -369,7 +369,7 @@ func (p *GemfileParser) parseRubyVersion(line string) string {
 }
 
 // parseVariable parses variable assignments like: rails_version = '~> 8.0.1'
-func (p *GemfileParser) parseVariable(line string) (string, string) {
+func (p *GemfileParser) parseVariable(line string) (varName, varValue string) {
 	re := regexp.MustCompile(`^(\w+)\s*=\s*['"]([^'"]+)['"]`)
 	matches := re.FindStringSubmatch(line)
 	if len(matches) >= 3 {

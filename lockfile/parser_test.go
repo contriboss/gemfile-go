@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+const (
+	// Test-specific constants
+	testRailsGem = "rails"
+	testVersion  = "0.1.0"
+)
+
 func TestParse(t *testing.T) {
 	lockfileContent := `GEM
   remote: https://rubygems.org/
@@ -61,10 +67,8 @@ BUNDLED WITH
 	nokogiri := findGem(lockfile.GemSpecs, "nokogiri")
 	if nokogiri == nil {
 		t.Error("nokogiri gem not found")
-	} else {
-		if nokogiri.Platform != "x86_64-darwin" {
-			t.Errorf("Expected nokogiri platform x86_64-darwin, got %s", nokogiri.Platform)
-		}
+	} else if nokogiri.Platform != "x86_64-darwin" {
+		t.Errorf("Expected nokogiri platform x86_64-darwin, got %s", nokogiri.Platform)
 	}
 
 	// Test platforms
@@ -112,7 +116,7 @@ func TestParseGitLockfile(t *testing.T) {
 	}
 
 	second := lockfile.GitSpecs[1]
-	if second.Name != "state_machines" || second.Branch != "master" {
+	if second.Name != stateMachinesGem || second.Branch != "master" {
 		t.Errorf("unexpected second git gem: %+v", second)
 	}
 
@@ -160,7 +164,7 @@ func TestFilterGemsByGroups(t *testing.T) {
 	}
 
 	filtered := FilterGemsByGroups(gems, []string{"production"}, nil)
-	if len(filtered) != 1 || filtered[0].Name != "rails" {
+	if len(filtered) != 1 || filtered[0].Name != testRailsGem {
 		t.Errorf("--only production failed: %v", filtered)
 	}
 
@@ -170,7 +174,7 @@ func TestFilterGemsByGroups(t *testing.T) {
 	}
 
 	filtered = FilterGemsByGroups(gems, []string{"production"}, []string{"development"})
-	if len(filtered) != 1 || filtered[0].Name != "rails" {
+	if len(filtered) != 1 || filtered[0].Name != testRailsGem {
 		t.Errorf("combined only/without failed: %v", filtered)
 	}
 }
@@ -216,7 +220,23 @@ func TestParseBundler2File(t *testing.T) {
 }
 
 func TestParsePathGems(t *testing.T) {
-	lockfileContent := `GIT
+	lockfileContent := getPathGemsTestData()
+
+	lockfile, err := Parse(strings.NewReader(lockfileContent))
+	if err != nil {
+		t.Fatalf("Failed to parse lockfile: %v", err)
+	}
+
+	validatePathGemsCount(t, lockfile)
+	validatePathGems(t, lockfile)
+	validateGitGems(t, lockfile)
+	validateRegularGems(t, lockfile)
+	validatePathGemMethods(t, lockfile)
+}
+
+// getPathGemsTestData returns the test lockfile content
+func getPathGemsTestData() string {
+	return `GIT
   remote: https://github.com/state-machines/state_machines.git
   revision: e9d8375b5a94ee859e52496f36a9120411ec08e5
   branch: master
@@ -273,93 +293,89 @@ DEPENDENCIES
 
 BUNDLED WITH
    2.6.9`
+}
 
-	lockfile, err := Parse(strings.NewReader(lockfileContent))
-	if err != nil {
-		t.Fatalf("Failed to parse lockfile: %v", err)
-	}
-
-	// Test PATH gems parsed correctly
+// validatePathGemsCount validates the count of PATH gems
+func validatePathGemsCount(t *testing.T, lockfile *Lockfile) {
 	if len(lockfile.PathSpecs) != 3 {
 		t.Errorf("Expected 3 PATH gems, got %d", len(lockfile.PathSpecs))
 	}
+}
 
-	// Test first PATH gem
-	cms := lockfile.PathSpecs[0]
-	if cms.Name != "commonshare_cms" {
-		t.Errorf("Expected first PATH gem name 'commonshare_cms', got '%s'", cms.Name)
-	}
-	if cms.Version != "0.6.1" {
-		t.Errorf("Expected first PATH gem version '0.6.1', got '%s'", cms.Version)
-	}
-	if cms.Remote != "components/cms" {
-		t.Errorf("Expected first PATH gem remote 'components/cms', got '%s'", cms.Remote)
-	}
-	if len(cms.Dependencies) != 7 {
-		t.Errorf("Expected 7 dependencies for commonshare_cms, got %d", len(cms.Dependencies))
-	}
-
-	// Test second PATH gem
-	insight := lockfile.PathSpecs[1]
-	if insight.Name != "common_insight" {
-		t.Errorf("Expected second PATH gem name 'common_insight', got '%s'", insight.Name)
-	}
-	if insight.Version != "0.1.0" {
-		t.Errorf("Expected second PATH gem version '0.1.0', got '%s'", insight.Version)
-	}
-	if insight.Remote != "components/common_insight" {
-		t.Errorf("Expected second PATH gem remote 'components/common_insight', got '%s'", insight.Remote)
-	}
-	if len(insight.Dependencies) != 4 {
-		t.Errorf("Expected 4 dependencies for common_insight, got %d", len(insight.Dependencies))
+// validatePathGems validates individual PATH gems
+func validatePathGems(t *testing.T, lockfile *Lockfile) {
+	pathGemTests := []struct {
+		index       int
+		name        string
+		version     string
+		remote      string
+		depCount    int
+		description string
+	}{
+		{0, "commonshare_cms", "0.6.1", "components/cms", 7, "first"},
+		{1, "common_insight", testVersion, "components/common_insight", 4, "second"},
+		{2, "frontend_link", testVersion, "components/frontend_link", 2, "third"},
 	}
 
-	// Test third PATH gem
-	frontend := lockfile.PathSpecs[2]
-	if frontend.Name != "frontend_link" {
-		t.Errorf("Expected third PATH gem name 'frontend_link', got '%s'", frontend.Name)
+	for _, test := range pathGemTests {
+		if test.index >= len(lockfile.PathSpecs) {
+			continue
+		}
+		gem := lockfile.PathSpecs[test.index]
+		validatePathGem(t, &gem, test.name, test.version, test.remote, test.depCount, test.description)
 	}
-	if frontend.Version != "0.1.0" {
-		t.Errorf("Expected third PATH gem version '0.1.0', got '%s'", frontend.Version)
-	}
-	if frontend.Remote != "components/frontend_link" {
-		t.Errorf("Expected third PATH gem remote 'components/frontend_link', got '%s'", frontend.Remote)
-	}
-	if len(frontend.Dependencies) != 2 {
-		t.Errorf("Expected 2 dependencies for frontend_link, got %d", len(frontend.Dependencies))
-	}
+}
 
-	// Test that Git gems are still parsed correctly alongside PATH gems
+// validatePathGem validates a single PATH gem
+func validatePathGem(t *testing.T, gem *PathGemSpec, expectedName, expectedVersion,
+	expectedRemote string, expectedDepCount int, description string) {
+	if gem.Name != expectedName {
+		t.Errorf("Expected %s PATH gem name '%s', got '%s'", description, expectedName, gem.Name)
+	}
+	if gem.Version != expectedVersion {
+		t.Errorf("Expected %s PATH gem version '%s', got '%s'", description, expectedVersion, gem.Version)
+	}
+	if gem.Remote != expectedRemote {
+		t.Errorf("Expected %s PATH gem remote '%s', got '%s'", description, expectedRemote, gem.Remote)
+	}
+	if len(gem.Dependencies) != expectedDepCount {
+		t.Errorf("Expected %d dependencies for %s, got %d", expectedDepCount, expectedName, len(gem.Dependencies))
+	}
+}
+
+// validateGitGems validates Git gems parsing
+func validateGitGems(t *testing.T, lockfile *Lockfile) {
 	if len(lockfile.GitSpecs) != 1 {
 		t.Errorf("Expected 1 Git gem, got %d", len(lockfile.GitSpecs))
+		return
 	}
 
 	git := lockfile.GitSpecs[0]
 	if git.Name != "state_machines" {
 		t.Errorf("Expected Git gem name 'state_machines', got '%s'", git.Name)
 	}
+}
 
-	// Test that regular gems are still parsed correctly
+// validateRegularGems validates regular gems parsing
+func validateRegularGems(t *testing.T, lockfile *Lockfile) {
 	if len(lockfile.GemSpecs) != 2 {
 		t.Errorf("Expected 2 regular gems, got %d", len(lockfile.GemSpecs))
 	}
+}
 
-	// Test PATH gem conversion methods
+// validatePathGemMethods validates PATH gem methods
+func validatePathGemMethods(t *testing.T, lockfile *Lockfile) {
+	if len(lockfile.PathSpecs) == 0 {
+		return
+	}
+
+	cms := lockfile.PathSpecs[0]
 	if cms.FullName() != "commonshare_cms-0.6.1" {
 		t.Errorf("Expected FullName 'commonshare_cms-0.6.1', got '%s'", cms.FullName())
 	}
 
-	_, err = cms.SemVer()
+	_, err := cms.SemVer()
 	if err != nil {
 		t.Errorf("PATH gem SemVer parsing failed: %v", err)
 	}
-}
-
-func findPathGem(pathGems []PathGemSpec, name string) *PathGemSpec {
-	for i := range pathGems {
-		if pathGems[i].Name == name {
-			return &pathGems[i]
-		}
-	}
-	return nil
 }

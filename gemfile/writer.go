@@ -7,11 +7,6 @@ import (
 	"strings"
 )
 
-const (
-	// filePermission is the default permission for Gemfile writes
-	filePermission = 0600
-)
-
 // GemfileWriter handles writing and modifying Gemfiles
 type GemfileWriter struct {
 	filepath string
@@ -35,7 +30,7 @@ func (w *GemfileWriter) Load() error {
 }
 
 // AddGem adds a gem to the Gemfile
-func (w *GemfileWriter) AddGem(dep GemDependency) error {
+func (w *GemfileWriter) AddGem(dep *GemDependency) error {
 	if err := w.Load(); err != nil {
 		return err
 	}
@@ -101,71 +96,165 @@ func (w *GemfileWriter) isGemLine(line, gemName string) bool {
 }
 
 // formatGemLine formats a gem dependency into a Gemfile line
-func (w *GemfileWriter) formatGemLine(dep GemDependency) string {
+// func (w *GemfileWriter) formatGemLine(dep *GemDependency) string {
+// 	parts := []string{fmt.Sprintf("gem '%s'", dep.Name)}
+
+// 	// Add version constraints
+// 	for _, constraint := range dep.Constraints {
+// 		parts = append(parts, fmt.Sprintf("'%s'", constraint))
+// 	}
+
+// 	// Add source information
+// 	if dep.Source != nil {
+// 		switch dep.Source.Type {
+// 		case "git":
+// 			if strings.Contains(dep.Source.URL, "github.com") {
+// 				// Use github shorthand if possible
+// 				githubPath := extractGitHubPath(dep.Source.URL)
+// 				if githubPath != "" {
+// 					parts = append(parts, fmt.Sprintf("github: '%s'", githubPath))
+// 				} else {
+// 					parts = append(parts, fmt.Sprintf("git: '%s'", dep.Source.URL))
+// 				}
+// 			} else {
+// 				parts = append(parts, fmt.Sprintf("git: '%s'", dep.Source.URL))
+// 			}
+
+// 			if dep.Source.Branch != "" {
+// 				parts = append(parts, fmt.Sprintf("branch: '%s'", dep.Source.Branch))
+// 			}
+// 			if dep.Source.Tag != "" {
+// 				parts = append(parts, fmt.Sprintf("tag: '%s'", dep.Source.Tag))
+// 			}
+// 			if dep.Source.Ref != "" {
+// 				parts = append(parts, fmt.Sprintf("ref: '%s'", dep.Source.Ref))
+// 			}
+// 		case "path":
+// 			parts = append(parts, fmt.Sprintf("path: '%s'", dep.Source.URL))
+// 		case rubygemsSource:
+// 			if dep.Source.URL != rubygemsURL {
+// 				parts = append(parts, fmt.Sprintf("source: '%s'", dep.Source.URL))
+// 			}
+// 		}
+// 	}
+
+// 	// Add groups (if not default)
+// 	if len(dep.Groups) > 0 && !isDefaultGroup(dep.Groups) {
+// 		if len(dep.Groups) == 1 {
+// 			parts = append(parts, fmt.Sprintf("group: :%s", dep.Groups[0]))
+// 		} else {
+// 			groupsStr := make([]string, len(dep.Groups))
+// 			for i, group := range dep.Groups {
+// 				groupsStr[i] = ":" + group
+// 			}
+// 			parts = append(parts, fmt.Sprintf("groups: [%s]", strings.Join(groupsStr, ", ")))
+// 		}
+// 	}
+
+// 	// Add require option
+// 	if dep.Require != nil {
+// 		if *dep.Require == "" || *dep.Require == falseValue {
+// 			parts = append(parts, "require: false")
+// 		} else {
+// 			parts = append(parts, fmt.Sprintf("require: '%s'", *dep.Require))
+// 		}
+// 	}
+
+// 	return strings.Join(parts, ", ")
+// }
+
+// formatGemLine formats a gem dependency into a Gemfile line string.
+func (w *GemfileWriter) formatGemLine(dep *GemDependency) string {
 	parts := []string{fmt.Sprintf("gem '%s'", dep.Name)}
+	parts = append(parts, w.formatConstraints(dep)...)
 
-	// Add version constraints
-	for _, constraint := range dep.Constraints {
-		parts = append(parts, fmt.Sprintf("'%s'", constraint))
+	if source := w.formatSource(dep); source != "" {
+		parts = append(parts, source)
 	}
 
-	// Add source information
-	if dep.Source != nil {
-		switch dep.Source.Type {
-		case "git":
-			if strings.Contains(dep.Source.URL, "github.com") {
-				// Use github shorthand if possible
-				githubPath := extractGitHubPath(dep.Source.URL)
-				if githubPath != "" {
-					parts = append(parts, fmt.Sprintf("github: '%s'", githubPath))
-				} else {
-					parts = append(parts, fmt.Sprintf("git: '%s'", dep.Source.URL))
-				}
-			} else {
-				parts = append(parts, fmt.Sprintf("git: '%s'", dep.Source.URL))
-			}
-
-			if dep.Source.Branch != "" {
-				parts = append(parts, fmt.Sprintf("branch: '%s'", dep.Source.Branch))
-			}
-			if dep.Source.Tag != "" {
-				parts = append(parts, fmt.Sprintf("tag: '%s'", dep.Source.Tag))
-			}
-			if dep.Source.Ref != "" {
-				parts = append(parts, fmt.Sprintf("ref: '%s'", dep.Source.Ref))
-			}
-		case "path":
-			parts = append(parts, fmt.Sprintf("path: '%s'", dep.Source.URL))
-		case "rubygems":
-			if dep.Source.URL != "https://rubygems.org" {
-				parts = append(parts, fmt.Sprintf("source: '%s'", dep.Source.URL))
-			}
-		}
+	if groups := w.formatGroups(dep); groups != "" {
+		parts = append(parts, groups)
 	}
 
-	// Add groups (if not default)
-	if len(dep.Groups) > 0 && !isDefaultGroup(dep.Groups) {
-		if len(dep.Groups) == 1 {
-			parts = append(parts, fmt.Sprintf("group: :%s", dep.Groups[0]))
-		} else {
-			groupsStr := make([]string, len(dep.Groups))
-			for i, group := range dep.Groups {
-				groupsStr[i] = ":" + group
-			}
-			parts = append(parts, fmt.Sprintf("groups: [%s]", strings.Join(groupsStr, ", ")))
-		}
-	}
-
-	// Add require option
-	if dep.Require != nil {
-		if *dep.Require == "" || *dep.Require == "false" {
-			parts = append(parts, "require: false")
-		} else {
-			parts = append(parts, fmt.Sprintf("require: '%s'", *dep.Require))
-		}
+	if require := w.formatRequire(dep); require != "" {
+		parts = append(parts, require)
 	}
 
 	return strings.Join(parts, ", ")
+}
+
+// formatConstraints formats the version constraints for a gem.
+func (w *GemfileWriter) formatConstraints(dep *GemDependency) []string {
+	var parts []string
+	for _, constraint := range dep.Constraints {
+		parts = append(parts, fmt.Sprintf("'%s'", constraint))
+	}
+	return parts
+}
+
+// formatSource formats the source information for a gem.
+func (w *GemfileWriter) formatSource(dep *GemDependency) string {
+	if dep.Source == nil {
+		return ""
+	}
+
+	var parts []string
+	switch dep.Source.Type {
+	case "git":
+		if strings.Contains(dep.Source.URL, "github.com") {
+			githubPath := extractGitHubPath(dep.Source.URL)
+			if githubPath != "" {
+				parts = append(parts, fmt.Sprintf("github: '%s'", githubPath))
+			} else {
+				parts = append(parts, fmt.Sprintf("git: '%s'", dep.Source.URL))
+			}
+		} else {
+			parts = append(parts, fmt.Sprintf("git: '%s'", dep.Source.URL))
+		}
+
+		if dep.Source.Branch != "" {
+			parts = append(parts, fmt.Sprintf("branch: '%s'", dep.Source.Branch))
+		}
+		if dep.Source.Tag != "" {
+			parts = append(parts, fmt.Sprintf("tag: '%s'", dep.Source.Tag))
+		}
+		if dep.Source.Ref != "" {
+			parts = append(parts, fmt.Sprintf("ref: '%s'", dep.Source.Ref))
+		}
+	case "path":
+		parts = append(parts, fmt.Sprintf("path: '%s'", dep.Source.URL))
+	case rubygemsSource:
+		if dep.Source.URL != rubygemsURL {
+			parts = append(parts, fmt.Sprintf("source: '%s'", dep.Source.URL))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// formatGroups formats the group information for a gem.
+func (w *GemfileWriter) formatGroups(dep *GemDependency) string {
+	if len(dep.Groups) > 0 && !isDefaultGroup(dep.Groups) {
+		if len(dep.Groups) == 1 {
+			return fmt.Sprintf("group: :%s", dep.Groups[0])
+		}
+		groupsStr := make([]string, len(dep.Groups))
+		for i, group := range dep.Groups {
+			groupsStr[i] = ":" + group
+		}
+		return fmt.Sprintf("groups: [%s]", strings.Join(groupsStr, ", "))
+	}
+	return ""
+}
+
+// formatRequire formats the require option for a gem.
+func (w *GemfileWriter) formatRequire(dep *GemDependency) string {
+	if dep.Require != nil {
+		if *dep.Require == "" || *dep.Require == falseValue {
+			return "require: false"
+		}
+		return fmt.Sprintf("require: '%s'", *dep.Require)
+	}
+	return ""
 }
 
 // extractGitHubPath extracts owner/repo from GitHub URLs
@@ -200,7 +289,7 @@ func (w *GemfileWriter) findInsertionPoint(groups []string) int {
 				continue
 			}
 
-			if trimmed == "end" {
+			if trimmed == endKeyword {
 				inGroupBlock = false
 				continue
 			}
@@ -226,7 +315,7 @@ func (w *GemfileWriter) save() error {
 }
 
 // AddGemToFile is a convenience function to add a gem to a Gemfile
-func AddGemToFile(filepath string, dep GemDependency) error {
+func AddGemToFile(filepath string, dep *GemDependency) error {
 	writer := NewGemfileWriter(filepath)
 	return writer.AddGem(dep)
 }
