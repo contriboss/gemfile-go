@@ -15,7 +15,7 @@ func main() {
 	fmt.Println("=" + strings.Repeat("=", 40))
 
 	// You can pass a Gemfile.lock path as an argument
-	path := "Gemfile.lock"
+	path := "testdata/Gemfile.lock"
 	if len(os.Args) > 1 {
 		path = os.Args[1]
 	}
