@@ -47,18 +47,17 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Setup Go
       uses: actions/setup-go@v6
       with:
-        go-version-file: 'go.mod'
+        go-version: stable
 
-    - name: Install Mage
-      run: go install github.com/magefile/mage@latest
-
-    - name: Run linting
-      run: mage lint
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v8
+      with:
+        version: v2.1
 
   examples:
     name: Validate Examples
