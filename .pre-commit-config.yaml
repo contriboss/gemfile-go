@@ -16,9 +16,15 @@ repos:
     hooks:
       - id: golangci-lint
 
-  - repo: https://github.com/dnephin/pre-commit-golang
-    rev: v0.5.1
+  - repo: local
     hooks:
       - id: go-fmt
-      - id: go-imports
+        name: go-fmt
+        entry: gofmt -l -s -w
+        language: system
+        files: \.go$
       - id: go-mod-tidy
+        name: go-mod-tidy
+        entry: go mod tidy
+        language: system
+        files: go.mod
