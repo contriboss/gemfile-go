@@ -72,6 +72,7 @@ linters:
       - linters:
           - dupl
           - funlen
+          - gocyclo
         path: _test\.go
       - linters:
           - funlen
