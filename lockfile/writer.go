@@ -71,32 +71,59 @@ func (w *LockfileWriter) WriteFile(lf *Lockfile, path string) error {
 	return w.Write(lf, file)
 }
 
-// writeGemSection writes the GEM section with sorted specs.
+// writeGemSection writes the GEM section(s) with sorted specs.
+// If gems have different SourceURLs, writes multiple GEM sections.
 func (w *LockfileWriter) writeGemSection(lf *Lockfile, buf *bufio.Writer) error {
 	if len(lf.GemSpecs) == 0 {
 		return nil
 	}
 
-	if _, err := buf.WriteString("GEM\n"); err != nil {
-		return err
-	}
-	if _, err := buf.WriteString(indent2 + "remote: " + w.DefaultGemRemote + "\n"); err != nil {
-		return err
-	}
-	if _, err := buf.WriteString(indent2 + "specs:\n"); err != nil {
-		return err
+	// Group gems by source URL
+	gemsBySource := make(map[string][]GemSpec)
+	for _, spec := range lf.GemSpecs {
+		source := spec.SourceURL
+		if source == "" {
+			source = w.DefaultGemRemote
+		}
+		gemsBySource[source] = append(gemsBySource[source], spec)
 	}
 
-	// Sort specs alphabetically by name
-	specs := make([]GemSpec, len(lf.GemSpecs))
-	copy(specs, lf.GemSpecs)
-	slices.SortFunc(specs, func(a, b GemSpec) int {
-		return strings.Compare(a.Name, b.Name)
-	})
+	// Sort sources for consistent output
+	var sources []string
+	for source := range gemsBySource {
+		sources = append(sources, source)
+	}
+	slices.Sort(sources)
 
-	for i := range specs {
-		if err := w.writeGemSpec(buf, &specs[i]); err != nil {
+	// Write a GEM section for each source
+	for i, source := range sources {
+		if i > 0 {
+			// Add blank line between GEM sections
+			if _, err := buf.WriteString("\n"); err != nil {
+				return err
+			}
+		}
+
+		if _, err := buf.WriteString("GEM\n"); err != nil {
 			return err
+		}
+		if _, err := buf.WriteString(indent2 + "remote: " + source + "\n"); err != nil {
+			return err
+		}
+		if _, err := buf.WriteString(indent2 + "specs:\n"); err != nil {
+			return err
+		}
+
+		// Sort specs alphabetically by name
+		specs := gemsBySource[source]
+		slices.SortFunc(specs, func(a, b GemSpec) int {
+			return strings.Compare(a.Name, b.Name)
+		})
+
+		for j := range specs {
+			if err := w.writeGemSpec(buf, &specs[j]); err != nil {
+				return err
+			}
 		}
 	}
 

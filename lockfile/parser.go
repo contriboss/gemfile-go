@@ -565,3 +565,69 @@ func isGemIncluded(gemGroups, includeGroups []string) bool {
 	}
 	return false
 }
+
+// FilterGitGemsByGroups filters git gems based on included/excluded groups
+func FilterGitGemsByGroups(gems []GitGemSpec, includeGroups, excludeGroups []string) []GitGemSpec {
+	if len(includeGroups) == 0 && len(excludeGroups) == 0 {
+		return gems // No filtering needed
+	}
+
+	var filtered []GitGemSpec
+	for i := range gems {
+		gem := &gems[i]
+		gemGroups := getGitGemGroups(gem)
+
+		if isGemExcluded(gemGroups, excludeGroups) {
+			continue
+		}
+
+		if !isGemIncluded(gemGroups, includeGroups) {
+			continue
+		}
+
+		filtered = append(filtered, *gem)
+	}
+
+	return filtered
+}
+
+// getGitGemGroups returns the groups for a git gem, defaulting to "default" if none specified
+func getGitGemGroups(gem *GitGemSpec) []string {
+	if len(gem.Groups) == 0 {
+		return []string{"default"}
+	}
+	return gem.Groups
+}
+
+// FilterPathGemsByGroups filters path gems based on included/excluded groups
+func FilterPathGemsByGroups(gems []PathGemSpec, includeGroups, excludeGroups []string) []PathGemSpec {
+	if len(includeGroups) == 0 && len(excludeGroups) == 0 {
+		return gems // No filtering needed
+	}
+
+	var filtered []PathGemSpec
+	for i := range gems {
+		gem := &gems[i]
+		gemGroups := getPathGemGroups(gem)
+
+		if isGemExcluded(gemGroups, excludeGroups) {
+			continue
+		}
+
+		if !isGemIncluded(gemGroups, includeGroups) {
+			continue
+		}
+
+		filtered = append(filtered, *gem)
+	}
+
+	return filtered
+}
+
+// getPathGemGroups returns the groups for a path gem, defaulting to "default" if none specified
+func getPathGemGroups(gem *PathGemSpec) []string {
+	if len(gem.Groups) == 0 {
+		return []string{"default"}
+	}
+	return gem.Groups
+}
