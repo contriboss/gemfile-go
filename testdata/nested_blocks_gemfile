@@ -1,0 +1,16 @@
+# Test nested blocks
+source 'https://rubygems.org'
+
+gem 'rake'
+
+source 'https://gem.coop' do
+  gem 'minitest'
+
+  group :development do
+    gem 'debug'
+  end
+
+  gem 'rspec'
+end
+
+gem 'rack'

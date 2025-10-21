@@ -32,7 +32,7 @@ type ParsedGemfile struct {
 type GemDependency struct {
 	Name        string   // Gem name
 	Constraints []string // Version constraints (e.g., "~> 2.0" means >= 2.0.0 and < 3.0.0)
-	Source      *Source  // Git, path, or nil for default source
+	Source      *Source  // Git, path, source block URL, or nil for default source
 	Groups      []string // Groups (empty means :default)
 	Require     *string  // Require behavior (nil = normal, "false" = no auto-require)
 	Comment     string   // Inline comment if present
@@ -75,6 +75,8 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 	lineNum := 0
 	currentGroups := []string{"default"} // Default group
 	variables := make(map[string]string) // Track variables
+	var currentSource *Source            // Track current source block
+	blockDepth := 0                      // Track nesting depth for source blocks
 
 	for scanner.Scan() {
 		lineNum++
@@ -95,7 +97,7 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 		expandedLine := p.expandVariables(line, variables)
 
 		// Parse different types of lines
-		if err := p.parseLine(expandedLine, &currentGroups, result); err != nil {
+		if err := p.parseLine(expandedLine, &currentGroups, &currentSource, &blockDepth, result); err != nil {
 			return nil, fmt.Errorf("line %d: %w", lineNum, err)
 		}
 	}
@@ -104,13 +106,19 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 }
 
 // parseLine parses a single line of the Gemfile
-func (p *GemfileParser) parseLine(line string, currentGroups *[]string, result *ParsedGemfile) error {
+func (p *GemfileParser) parseLine(line string, currentGroups *[]string, currentSource **Source, blockDepth *int, result *ParsedGemfile) error {
 	line = strings.TrimSpace(line)
 
 	// Parse source declarations
 	if strings.HasPrefix(line, "source ") {
-		if source, err := p.parseSource(line); err == nil {
+		source, isBlock, err := p.parseSource(line)
+		if err == nil {
 			result.Sources = append(result.Sources, source)
+			// If this is a source block (has 'do'), set it as current source
+			if isBlock {
+				*currentSource = &source
+				*blockDepth = 1 // Start tracking block depth
+			}
 		}
 		return nil
 	}
@@ -125,18 +133,28 @@ func (p *GemfileParser) parseLine(line string, currentGroups *[]string, result *
 	// Parse group blocks
 	if strings.HasPrefix(line, "group ") {
 		*currentGroups = p.parseGroups(line)
+		// Increment block depth if this is a group block
+		if strings.Contains(line, " do") {
+			*blockDepth++
+		}
 		return nil
 	}
 
 	// Parse end statements
 	if line == endKeyword {
+		*blockDepth--
+		// Reset current source when we exit a source block (depth returns to 0)
+		if *blockDepth == 0 {
+			*currentSource = nil
+		}
+		// Always reset groups when exiting any block
 		*currentGroups = []string{"default"}
 		return nil
 	}
 
 	// Parse gem declarations
 	if strings.HasPrefix(line, "gem ") {
-		dep, err := p.parseGemLine(line, *currentGroups)
+		dep, err := p.parseGemLine(line, *currentGroups, *currentSource)
 		if err != nil {
 			return err
 		}
@@ -157,18 +175,28 @@ func (p *GemfileParser) parseLine(line string, currentGroups *[]string, result *
 }
 
 // parseSource parses source declarations
-// Examples: source 'https://rubygems.org'
-func (p *GemfileParser) parseSource(line string) (Source, error) {
+// Examples:
+//
+//	source 'https://rubygems.org'
+//	source 'https://gem.coop' do
+//
+// Returns the Source, a boolean indicating if it's a block (has 'do'), and an error
+func (p *GemfileParser) parseSource(line string) (Source, bool, error) {
 	re := regexp.MustCompile(`source\s+['"]([^'"]+)['"]`)
 	matches := re.FindStringSubmatch(line)
 	if len(matches) < 2 {
-		return Source{}, fmt.Errorf("invalid source line: %s", line)
+		return Source{}, false, fmt.Errorf("invalid source line: %s", line)
 	}
 
-	return Source{
+	source := Source{
 		Type: "rubygems",
 		URL:  matches[1],
-	}, nil
+	}
+
+	// Check if this is a source block (has 'do' keyword)
+	isBlock := strings.Contains(line, " do")
+
+	return source, isBlock, nil
 }
 
 // parseGroups parses group declarations
@@ -200,7 +228,7 @@ func (p *GemfileParser) parseGroups(line string) []string {
 //	gem 'capybara', require: false
 //	gem 'state_machines', github: 'state-machines/state_machines', branch: 'master'
 //	gem 'commonshare_cms', path: 'components/cms'
-func (p *GemfileParser) parseGemLine(line string, currentGroups []string) (*GemDependency, error) {
+func (p *GemfileParser) parseGemLine(line string, currentGroups []string, currentSource *Source) (*GemDependency, error) {
 	// Basic gem pattern: gem 'name'
 	nameRe := regexp.MustCompile(`gem\s+['"]([^'"]+)['"]`)
 	nameMatches := nameRe.FindStringSubmatch(line)
@@ -217,8 +245,16 @@ func (p *GemfileParser) parseGemLine(line string, currentGroups []string) (*GemD
 	// Extract version constraints
 	dep.Constraints = p.extractVersionConstraints(line)
 
-	// Extract special options
+	// Extract special options (git, path, etc.)
 	dep.Source = p.extractSource(line)
+
+	// If no explicit source was found but we're inside a source block, use currentSource
+	if dep.Source == nil && currentSource != nil {
+		// Create a copy of the current source for this gem
+		sourceCopy := *currentSource
+		dep.Source = &sourceCopy
+	}
+
 	dep.Require = p.extractRequire(line)
 
 	// Extract group overrides

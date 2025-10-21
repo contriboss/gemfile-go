@@ -1,0 +1,30 @@
+# Test Gemfile with source blocks
+source 'https://rubygems.org'
+
+ruby '3.2.0'
+
+gem 'rake'
+gem 'rails', '~> 7.0'
+
+source 'https://gem.coop' do
+  gem 'minitest'
+  gem 'rspec', '~> 3.0'
+end
+
+gem 'rack'
+gem 'puma', '>= 5.0'
+
+source 'https://private.gems.example.com' do
+  gem 'private_gem'
+  gem 'another_private', require: false
+end
+
+group :development do
+  gem 'rubocop'
+end
+
+# Gem with explicit git source inside a source block should use git source
+source 'https://gem.coop' do
+  gem 'custom_gem'
+  gem 'git_gem', github: 'user/repo'
+end

@@ -237,3 +237,112 @@ func checkGemDependency(t *testing.T, dep *GemDependency, expectedGems map[strin
 		}
 	}
 }
+
+func TestSourceBlocks(t *testing.T) {
+	// Create a test Gemfile with source blocks
+	testGemfile := `# Test Gemfile with source blocks
+source 'https://rubygems.org'
+
+ruby '3.2.0'
+
+gem 'rake'
+gem 'rails', '~> 7.0'
+
+source 'https://gem.coop' do
+  gem 'minitest'
+  gem 'rspec', '~> 3.0'
+end
+
+gem 'rack'
+gem 'puma', '>= 5.0'
+
+source 'https://private.gems.example.com' do
+  gem 'private_gem'
+  gem 'another_private', require: false
+end
+
+group :development do
+  gem 'rubocop'
+end
+
+# Gem with explicit git source inside a source block should use git source
+source 'https://gem.coop' do
+  gem 'custom_gem'
+  gem 'git_gem', github: 'user/repo'
+end
+`
+
+	// Write to temp file
+	tmpDir := t.TempDir()
+	gemfilePath := filepath.Join(tmpDir, "Gemfile")
+	err := os.WriteFile(gemfilePath, []byte(testGemfile), 0600)
+	if err != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", err)
+	}
+
+	// Parse the Gemfile
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	// Test source parsing - should have 4 sources (rubygems.org + 2x gem.coop + private.gems)
+	expectedSourceCount := 4
+	if len(parsed.Sources) != expectedSourceCount {
+		t.Errorf("Expected %d sources, got %d", expectedSourceCount, len(parsed.Sources))
+	}
+
+	// Define expected gem sources
+	expectedGemSources := map[string]struct {
+		hasSource  bool
+		sourceURL  string
+		sourceType string
+	}{
+		"rake":            {hasSource: false}, // No source block, should be nil
+		"rails":           {hasSource: false}, // No source block, should be nil
+		"minitest":        {hasSource: true, sourceURL: "https://gem.coop", sourceType: "rubygems"},
+		"rspec":           {hasSource: true, sourceURL: "https://gem.coop", sourceType: "rubygems"},
+		"rack":            {hasSource: false}, // Outside source block, should be nil
+		"puma":            {hasSource: false}, // Outside source block, should be nil
+		"private_gem":     {hasSource: true, sourceURL: "https://private.gems.example.com", sourceType: "rubygems"},
+		"another_private": {hasSource: true, sourceURL: "https://private.gems.example.com", sourceType: "rubygems"},
+		"rubocop":         {hasSource: false}, // In group block, not source block
+		"custom_gem":      {hasSource: true, sourceURL: "https://gem.coop", sourceType: "rubygems"},
+		"git_gem":         {hasSource: true, sourceURL: "https://github.com/user/repo.git", sourceType: "git"}, // Explicit git source overrides
+	}
+
+	// Check each gem's source
+	for _, dep := range parsed.Dependencies {
+		expected, exists := expectedGemSources[dep.Name]
+		if !exists {
+			t.Errorf("Unexpected gem found: %s", dep.Name)
+			continue
+		}
+
+		if expected.hasSource {
+			if dep.Source == nil {
+				t.Errorf("Gem %s: expected source but got nil", dep.Name)
+			} else {
+				if dep.Source.URL != expected.sourceURL {
+					t.Errorf("Gem %s: expected source URL %s, got %s",
+						dep.Name, expected.sourceURL, dep.Source.URL)
+				}
+				if dep.Source.Type != expected.sourceType {
+					t.Errorf("Gem %s: expected source type %s, got %s",
+						dep.Name, expected.sourceType, dep.Source.Type)
+				}
+			}
+		} else {
+			if dep.Source != nil {
+				t.Errorf("Gem %s: expected no source but got %s (%s)",
+					dep.Name, dep.Source.URL, dep.Source.Type)
+			}
+		}
+	}
+
+	// Verify all expected gems were found
+	if len(parsed.Dependencies) != len(expectedGemSources) {
+		t.Errorf("Expected %d gems, got %d", len(expectedGemSources), len(parsed.Dependencies))
+	}
+}
