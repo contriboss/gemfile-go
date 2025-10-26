@@ -80,7 +80,8 @@ func (w *LockfileWriter) writeGemSection(lf *Lockfile, buf *bufio.Writer) error 
 
 	// Group gems by source URL
 	gemsBySource := make(map[string][]GemSpec)
-	for _, spec := range lf.GemSpecs {
+	for i := range lf.GemSpecs {
+		spec := lf.GemSpecs[i]
 		source := spec.SourceURL
 		if source == "" {
 			source = w.DefaultGemRemote
