@@ -1,0 +1,15 @@
+# Test Gemfile with gemspec directive
+source 'https://rubygems.org'
+
+ruby '3.0.0'
+
+# Load dependencies from gemspec
+gemspec
+
+# Additional gems not in gemspec
+gem 'puma', '~> 5.6'
+
+group :test do
+  gem 'capybara', '>= 3.39'
+  gem 'selenium-webdriver'
+end

@@ -8,8 +8,14 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+)
+
+// Parser constants
+const (
+	gemspecDirective = "gemspec"
 )
 
 // GemfileParser parses Gemfile syntax into structured data.
@@ -21,10 +27,11 @@ type GemfileParser struct {
 
 // ParsedGemfile represents the parsed Gemfile content.
 type ParsedGemfile struct {
-	Dependencies []GemDependency   // Declared gems
-	Sources      []Source          // Gem sources
-	RubyVersion  string            // Ruby version requirement
-	GitSources   map[string]string // Gem name to git URL mapping
+	Dependencies []GemDependency    // Declared gems
+	Sources      []Source           // Gem sources
+	RubyVersion  string             // Ruby version requirement
+	GitSources   map[string]string  // Gem name to git URL mapping
+	Gemspecs     []GemspecReference // Gemspec references
 }
 
 // GemDependency represents a gem dependency.
@@ -47,9 +54,35 @@ type Source struct {
 	Ref    string // for git sources
 }
 
+// GemspecReference represents a gemspec directive in the Gemfile.
+// Ruby equivalent: gemspec path: "path", name: "name", development_group: :group
+type GemspecReference struct {
+	Path             string // Path to search for gemspec files (defaults to ".")
+	Name             string // Specific gemspec name to load (optional)
+	DevelopmentGroup string // Group for development dependencies (defaults to "development")
+	Glob             string // Glob pattern for finding gemspec files (defaults to "{,*,*/*}.gemspec")
+}
+
+// GemspecFile represents a parsed .gemspec file
+type GemspecFile struct {
+	Name                    string            // Gem name from spec.name
+	Version                 string            // Gem version from spec.version
+	Summary                 string            // Gem summary
+	Description             string            // Gem description
+	Authors                 []string          // Gem authors
+	Email                   []string          // Contact emails
+	Homepage                string            // Project homepage
+	License                 string            // License identifier
+	RuntimeDependencies     []GemDependency   // Runtime dependencies from add_runtime_dependency
+	DevelopmentDependencies []GemDependency   // Development dependencies from add_development_dependency
+	RequiredRubyVersion     string            // Required Ruby version
+	Files                   []string          // Files included in the gem
+	Metadata                map[string]string // Additional metadata
+}
+
 // NewGemfileParser creates a new parser for the given Gemfile path
-func NewGemfileParser(filepath string) *GemfileParser {
-	return &GemfileParser{filepath: filepath}
+func NewGemfileParser(filePath string) *GemfileParser {
+	return &GemfileParser{filepath: filePath}
 }
 
 // Parse parses the Gemfile and returns structured data
@@ -106,7 +139,13 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 }
 
 // parseLine parses a single line of the Gemfile
-func (p *GemfileParser) parseLine(line string, currentGroups *[]string, currentSource **Source, blockDepth *int, result *ParsedGemfile) error {
+func (p *GemfileParser) parseLine(
+	line string,
+	currentGroups *[]string,
+	currentSource **Source,
+	blockDepth *int,
+	result *ParsedGemfile,
+) error {
 	line = strings.TrimSpace(line)
 
 	// Parse source declarations
@@ -150,6 +189,11 @@ func (p *GemfileParser) parseLine(line string, currentGroups *[]string, currentS
 		// Always reset groups when exiting any block
 		*currentGroups = []string{"default"}
 		return nil
+	}
+
+	// Parse gemspec directive
+	if strings.HasPrefix(line, "gemspec") {
+		return p.handleGemspecDirective(line, result)
 	}
 
 	// Parse gem declarations
@@ -404,6 +448,61 @@ func (p *GemfileParser) parseRubyVersion(line string) string {
 	return ""
 }
 
+// parseGemspecDirective parses gemspec directive
+// Examples:
+//
+//	gemspec
+//	gemspec path: "components/payment"
+//	gemspec name: "payment_core"
+//	gemspec development_group: :ci
+//	gemspec path: ".", name: "my_gem", development_group: :test
+func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
+	gemspecRef := &GemspecReference{
+		Path:             ".",
+		DevelopmentGroup: "development",
+		Glob:             "{,*,*/*}.gemspec",
+	}
+
+	// If it's just "gemspec" with no options, return defaults
+	if strings.TrimSpace(line) == gemspecDirective {
+		return gemspecRef
+	}
+
+	// Parse path option
+	if pathRe := regexp.MustCompile(`path:\s*['"]([^'"]+)['"]`); pathRe.MatchString(line) {
+		matches := pathRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			gemspecRef.Path = matches[1]
+		}
+	}
+
+	// Parse name option
+	if nameRe := regexp.MustCompile(`name:\s*['"]([^'"]+)['"]`); nameRe.MatchString(line) {
+		matches := nameRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			gemspecRef.Name = matches[1]
+		}
+	}
+
+	// Parse development_group option
+	if devGroupRe := regexp.MustCompile(`development_group:\s*:(\w+)`); devGroupRe.MatchString(line) {
+		matches := devGroupRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			gemspecRef.DevelopmentGroup = matches[1]
+		}
+	}
+
+	// Parse glob option
+	if globRe := regexp.MustCompile(`glob:\s*['"]([^'"]+)['"]`); globRe.MatchString(line) {
+		matches := globRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			gemspecRef.Glob = matches[1]
+		}
+	}
+
+	return gemspecRef
+}
+
 // parseVariable parses variable assignments like: rails_version = '~> 8.0.1'
 func (p *GemfileParser) parseVariable(line string) (varName, varValue string) {
 	re := regexp.MustCompile(`^(\w+)\s*=\s*['"]([^'"]+)['"]`)
@@ -445,4 +544,20 @@ func (p *GemfileParser) isInsideQuotes(line, varName string) bool {
 
 	// If odd number of quotes, we're inside a quoted string
 	return (singleQuotes%2 == 1) || (doubleQuotes%2 == 1)
+}
+
+// handleGemspecDirective handles gemspec directive parsing and loading
+func (p *GemfileParser) handleGemspecDirective(line string, result *ParsedGemfile) error {
+	gemspecRef := p.parseGemspecDirective(line)
+	if gemspecRef != nil {
+		result.Gemspecs = append(result.Gemspecs, *gemspecRef)
+		// Load dependencies from the gemspec
+		deps, err := LoadGemspecDependencies(*gemspecRef, filepath.Dir(p.filepath))
+		if err != nil {
+			// Log warning but don't fail - gemspec might not exist yet during development
+			return nil
+		}
+		result.Dependencies = append(result.Dependencies, deps...)
+	}
+	return nil
 }
