@@ -338,7 +338,7 @@ func TestLoadGemspecDependencies(t *testing.T) {
 	if deps[0].Name != "test_gem" {
 		t.Errorf("Expected first dependency to be 'test_gem', got %s", deps[0].Name)
 	}
-	if deps[0].Source == nil || deps[0].Source.Type != "path" {
+	if deps[0].Source == nil || deps[0].Source.Type != pathSource {
 		t.Error("Expected first dependency to have a path source")
 	}
 

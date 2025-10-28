@@ -13,11 +13,6 @@ import (
 	"strings"
 )
 
-// Parser constants
-const (
-	gemspecDirective = "gemspec"
-)
-
 // GemfileParser parses Gemfile syntax into structured data.
 // Ruby equivalent: Bundler::Dsl
 type GemfileParser struct {
@@ -87,6 +82,7 @@ func NewGemfileParser(filePath string) *GemfileParser {
 }
 
 // Parse parses the Gemfile and returns structured data
+// It tries tree-sitter first (most robust), then falls back to regex parsing
 func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 	content, err := os.ReadFile(p.filepath)
 	if err != nil {
@@ -94,6 +90,23 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 	}
 
 	p.content = string(content)
+
+	// Try tree-sitter first (handles complex Ruby constructs like nested blocks)
+	// Note: Currently experimental - falls back to regex for edge cases
+	tsParser := NewTreeSitterGemfileParser([]byte(p.content))
+	gemfile, err := tsParser.ParseWithTreeSitter()
+
+	// Use tree-sitter result if it found content AND no gemspec directives
+	// (gemspec integration needs more work)
+	useTreeSitter := err == nil &&
+		(len(gemfile.Dependencies) > 0 || gemfile.RubyVersion != "") &&
+		len(gemfile.Gemspecs) == 0
+
+	if useTreeSitter {
+		return gemfile, nil
+	}
+
+	// Fall back to regex parsing (more battle-tested for edge cases)
 	return p.parseContent()
 }
 

@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	falseValue     = "false"
 	endKeyword     = "end"
 	rubygemsSource = "rubygems"
 	rubygemsURL    = "https://rubygems.org"

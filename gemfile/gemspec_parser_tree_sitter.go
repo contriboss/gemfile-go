@@ -6,41 +6,20 @@ import (
 	"strings"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
-	tree_sitter_ruby "github.com/tree-sitter/tree-sitter-ruby/bindings/go"
-)
-
-var (
-	// rubyLanguage caches the tree-sitter language instance so we only create it once.
-	rubyLanguage = tree_sitter.NewLanguage(tree_sitter_ruby.Language())
-)
-
-// Tree-sitter node type constants
-const (
-	nodeCall             = "call"
-	nodeBlock            = "block"
-	nodeDoBlock          = "do_block"
-	nodeScopeResolution  = "scope_resolution"
-	nodeIdentifier       = "identifier"
-	nodeElementReference = "element_reference"
-	nodeArray            = "array"
-	nodeString           = "string"
-	nodeStringContent    = "string_content"
-	nodeConstant         = "constant"
-	nodeSymbol           = "symbol"
-	nodeInteger          = "integer"
-	nodeBodyStatement    = "body_statement"
-	nodeAssignment       = "assignment"
-	nodeArgumentList     = "argument_list"
 )
 
 // TreeSitterGemspecParser handles parsing of .gemspec files using tree-sitter
 type TreeSitterGemspecParser struct {
 	content []byte
+	helper  *RubyASTHelper
 }
 
 // NewTreeSitterGemspecParser creates a new tree-sitter based gemspec parser
 func NewTreeSitterGemspecParser(content []byte) *TreeSitterGemspecParser {
-	return &TreeSitterGemspecParser{content: content}
+	return &TreeSitterGemspecParser{
+		content: content,
+		helper:  NewRubyASTHelper(content),
+	}
 }
 
 // ParseWithTreeSitter parses a .gemspec file using tree-sitter and returns structured data
@@ -511,5 +490,5 @@ func (p *TreeSitterGemspecParser) extractMetadataKey(node *tree_sitter.Node) str
 
 // getNodeText returns the text content of a node
 func (p *TreeSitterGemspecParser) getNodeText(node *tree_sitter.Node) string {
-	return node.Utf8Text(p.content)
+	return p.helper.GetNodeText(node)
 }
