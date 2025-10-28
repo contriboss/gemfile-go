@@ -28,3 +28,4 @@ repos:
         entry: go mod tidy
         language: system
         files: go.mod
+        pass_filenames: false

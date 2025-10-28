@@ -70,6 +70,7 @@ gem 'my_local_gem', path: '../local_gem'
 		groups      []string
 		sourceType  string
 		requireVal  *string
+		platforms   []string
 	}{
 		"rails": {
 			constraints: []string{"~> 7.0"},
@@ -182,6 +183,7 @@ func checkGemDependency(t *testing.T, dep *GemDependency, expectedGems map[strin
 	groups      []string
 	sourceType  string
 	requireVal  *string
+	platforms   []string
 }) {
 	expected, exists := expectedGems[dep.Name]
 	if !exists {
@@ -234,6 +236,21 @@ func checkGemDependency(t *testing.T, dep *GemDependency, expectedGems map[strin
 		} else if *dep.Require != *expected.requireVal {
 			t.Errorf("Gem %s: expected require %s, got %s",
 				dep.Name, *expected.requireVal, *dep.Require)
+		}
+	}
+
+	// Check platforms
+	if len(expected.platforms) > 0 {
+		if len(dep.Platforms) != len(expected.platforms) {
+			t.Errorf("Gem %s: expected %d platforms, got %d",
+				dep.Name, len(expected.platforms), len(dep.Platforms))
+		} else {
+			for i, platform := range expected.platforms {
+				if dep.Platforms[i] != platform {
+					t.Errorf("Gem %s: expected platform %s, got %s",
+						dep.Name, platform, dep.Platforms[i])
+				}
+			}
 		}
 	}
 }
@@ -344,5 +361,91 @@ end
 	// Verify all expected gems were found
 	if len(parsed.Dependencies) != len(expectedGemSources) {
 		t.Errorf("Expected %d gems, got %d", len(expectedGemSources), len(parsed.Dependencies))
+	}
+}
+
+func TestGemfileParserPlatforms(t *testing.T) {
+	// Create a test Gemfile with platform restrictions
+	testGemfile := `source 'https://rubygems.org'
+
+# Single platform
+gem "weakling", platforms: :jruby
+gem "ruby-debug", platforms: :mri_31
+
+# Multiple platforms
+gem "nokogiri", platforms: [:windows_31, :jruby]
+gem "thin", "~> 1.7", platforms: [:ruby, :mswin]
+
+# Platform with version constraints and require
+gem "sqlite3", "~> 1.4", require: false, platforms: :ruby
+
+# Platform with groups
+group :development do
+  gem "pry-byebug", platforms: :mri
+end
+`
+
+	// Write to temp file
+	tmpDir := t.TempDir()
+	gemfilePath := filepath.Join(tmpDir, "Gemfile")
+	err := os.WriteFile(gemfilePath, []byte(testGemfile), 0600)
+	if err != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", err)
+	}
+
+	// Parse the Gemfile
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	// Test platform parsing
+	expectedGems := map[string]struct {
+		constraints []string
+		groups      []string
+		sourceType  string
+		requireVal  *string
+		platforms   []string
+	}{
+		"weakling": {
+			constraints: []string{},
+			groups:      []string{"default"},
+			platforms:   []string{"jruby"},
+		},
+		"ruby-debug": {
+			constraints: []string{},
+			groups:      []string{"default"},
+			platforms:   []string{"mri_31"},
+		},
+		"nokogiri": {
+			constraints: []string{},
+			groups:      []string{"default"},
+			platforms:   []string{"windows_31", "jruby"},
+		},
+		"thin": {
+			constraints: []string{"~> 1.7"},
+			groups:      []string{"default"},
+			platforms:   []string{"ruby", "mswin"},
+		},
+		"sqlite3": {
+			constraints: []string{"~> 1.4"},
+			groups:      []string{"default"},
+			requireVal:  stringPtr(""),
+			platforms:   []string{"ruby"},
+		},
+		"pry-byebug": {
+			constraints: []string{},
+			groups:      []string{"development"},
+			platforms:   []string{"mri"},
+		},
+	}
+
+	if len(parsed.Dependencies) != len(expectedGems) {
+		t.Errorf("Expected %d gems, got %d", len(expectedGems), len(parsed.Dependencies))
+	}
+
+	for _, dep := range parsed.Dependencies {
+		checkGemDependency(t, &dep, expectedGems)
 	}
 }

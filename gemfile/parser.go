@@ -42,6 +42,7 @@ type GemDependency struct {
 	Source      *Source  // Git, path, source block URL, or nil for default source
 	Groups      []string // Groups (empty means :default)
 	Require     *string  // Require behavior (nil = normal, "false" = no auto-require)
+	Platforms   []string // Platform restrictions (e.g., [:jruby, :windows_31])
 	Comment     string   // Inline comment if present
 }
 
@@ -306,6 +307,9 @@ func (p *GemfileParser) parseGemLine(line string, currentGroups []string, curren
 		dep.Groups = groups
 	}
 
+	// Extract platform restrictions
+	dep.Platforms = p.extractPlatforms(line)
+
 	return dep, nil
 }
 
@@ -326,6 +330,9 @@ func (p *GemfileParser) extractVersionConstraints(line string) []string {
 	}
 	if optionsStart == -1 {
 		optionsStart = strings.Index(remaining, "groups:")
+	}
+	if optionsStart == -1 {
+		optionsStart = strings.Index(remaining, "platforms:")
 	}
 
 	versionPart := remaining
@@ -432,6 +439,37 @@ func (p *GemfileParser) extractGroupOverrides(line string) []string {
 				}
 			}
 			return groups
+		}
+	}
+
+	return nil
+}
+
+// extractPlatforms extracts platform restrictions from gem line
+func (p *GemfileParser) extractPlatforms(line string) []string {
+	// platforms: [:windows_31, :jruby]
+	if platformsRe := regexp.MustCompile(`platforms?:\s*\[([^\]]+)\]`); platformsRe.MatchString(line) {
+		matches := platformsRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			platformStr := matches[1]
+			platformRe := regexp.MustCompile(`:(\w+)`)
+			platformMatches := platformRe.FindAllStringSubmatch(platformStr, -1)
+
+			platforms := make([]string, 0, len(platformMatches))
+			for _, match := range platformMatches {
+				if len(match) > 1 {
+					platforms = append(platforms, match[1])
+				}
+			}
+			return platforms
+		}
+	}
+
+	// platforms: :jruby (single platform)
+	if platformRe := regexp.MustCompile(`platforms?:\s*:(\w+)`); platformRe.MatchString(line) {
+		matches := platformRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			return []string{matches[1]}
 		}
 	}
 
