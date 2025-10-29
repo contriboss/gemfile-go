@@ -74,6 +74,7 @@ type GemspecFile struct {
 	RequiredRubyVersion     string            // Required Ruby version
 	Files                   []string          // Files included in the gem
 	Metadata                map[string]string // Additional metadata
+	PostInstallMessage      string            // Post-install message
 }
 
 // NewGemfileParser creates a new parser for the given Gemfile path

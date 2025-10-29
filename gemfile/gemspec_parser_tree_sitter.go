@@ -264,6 +264,8 @@ func (p *TreeSitterGemspecParser) assignSimpleProperty(property, value string, g
 		gemspec.License = value
 	case "required_ruby_version":
 		gemspec.RequiredRubyVersion = value
+	case "post_install_message":
+		gemspec.PostInstallMessage = value
 	default:
 		return false
 	}
