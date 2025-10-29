@@ -334,18 +334,23 @@ func (p *GemfileParser) extractVersionConstraints(line string) []string {
 
 	// Pattern to match version strings (not including options like require:, github:, etc.)
 	// Stop at first option keyword
-	optionsStart := strings.Index(remaining, "require:")
-	if optionsStart == -1 {
-		optionsStart = strings.Index(remaining, "github:")
+	optionKeys := []string{
+		"require:",
+		"github:",
+		"git:",
+		"path:",
+		"groups:",
+		"group:",
+		"platforms:",
+		"platform:",
+		"source:",
 	}
-	if optionsStart == -1 {
-		optionsStart = strings.Index(remaining, "path:")
-	}
-	if optionsStart == -1 {
-		optionsStart = strings.Index(remaining, "groups:")
-	}
-	if optionsStart == -1 {
-		optionsStart = strings.Index(remaining, "platforms:")
+
+	optionsStart := -1
+	for _, key := range optionKeys {
+		if idx := strings.Index(remaining, key); idx != -1 && (optionsStart == -1 || idx < optionsStart) {
+			optionsStart = idx
+		}
 	}
 
 	versionPart := remaining
@@ -407,6 +412,17 @@ func (p *GemfileParser) extractSource(line string) *Source {
 		if len(matches) > 1 {
 			return &Source{
 				Type: "path",
+				URL:  matches[1],
+			}
+		}
+	}
+
+	// Check for inline rubygems source: source: 'https://...'
+	if sourceRe := regexp.MustCompile(`source:\s*['"]([^'"]+)['"]`); sourceRe.MatchString(line) {
+		matches := sourceRe.FindStringSubmatch(line)
+		if len(matches) > 1 {
+			return &Source{
+				Type: "rubygems",
 				URL:  matches[1],
 			}
 		}

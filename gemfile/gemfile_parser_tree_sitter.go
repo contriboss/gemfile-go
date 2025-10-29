@@ -153,7 +153,7 @@ func (p *TreeSitterGemfileParser) processCall(node *tree_sitter.Node, gemfile *P
 		p.processGroup(node, gemfile)
 	case platformsMethod, platformMethod:
 		p.processPlatform(node, gemfile)
-	case "source":
+	case sourceKey:
 		p.processSource(node, gemfile)
 	case "ruby":
 		p.processRubyVersion(node, gemfile)
@@ -506,6 +506,11 @@ func (p *TreeSitterGemfileParser) applyGemOption(key, value string, dep *GemDepe
 		// Always create a new source for explicit path options
 		dep.Source = &Source{Type: "path"}
 		dep.Source.URL = value
+	case sourceKey:
+		// Always create a new rubygems source for explicit source options
+		if value != "" {
+			dep.Source = &Source{Type: "rubygems", URL: value}
+		}
 	case "branch":
 		// Create new git source if nil or not git (to avoid mutating context source)
 		if dep.Source == nil || dep.Source.Type != gitKey {

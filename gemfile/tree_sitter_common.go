@@ -46,6 +46,7 @@ const (
 	gitKey           = "git"
 	githubKey        = "github"
 	groupsKey        = "groups"
+	sourceKey        = "source"
 	trueValue        = "true"
 	falseValue       = "false"
 )

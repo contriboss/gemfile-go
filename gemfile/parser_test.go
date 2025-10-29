@@ -1,10 +1,13 @@
 package gemfile
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+const rubyChinaURL = "https://gems.ruby-china.com"
 
 func TestGemfileParser(t *testing.T) {
 	// Create a test Gemfile
@@ -51,7 +54,7 @@ gem 'my_local_gem', path: '../local_gem'
 		t.Errorf("Expected 1 source, got %d", len(parsed.Sources))
 	} else {
 		source := parsed.Sources[0]
-		if source.Type != "rubygems" {
+		if source.Type != rubygemsSource {
 			t.Errorf("Expected source type 'rubygems', got %s", source.Type)
 		}
 		if source.URL != rubygemsURL {
@@ -164,6 +167,108 @@ gem 'puma', '~> 5.0'`
 	}
 }
 
+func TestInlineSourceOption(t *testing.T) {
+	gemfileContent := fmt.Sprintf("gem 'webmock', '~> 3.19', source: '%s'", rubyChinaURL)
+
+	check := func(t *testing.T, parsed *ParsedGemfile) {
+		t.Helper()
+		if len(parsed.Dependencies) != 1 {
+			t.Fatalf("expected 1 dependency, got %d", len(parsed.Dependencies))
+		}
+
+		dep := parsed.Dependencies[0]
+		if len(dep.Constraints) != 1 || dep.Constraints[0] != "~> 3.19" {
+			t.Errorf("expected constraint '~> 3.19', got %v", dep.Constraints)
+		}
+		if dep.Source == nil {
+			t.Fatalf("expected inline source to set source, got nil")
+		}
+		if dep.Source.Type != rubygemsSource {
+			t.Errorf("expected source type 'rubygems', got %s", dep.Source.Type)
+		}
+		if dep.Source.URL != rubyChinaURL {
+			t.Errorf("expected source URL %q, got %s", rubyChinaURL, dep.Source.URL)
+		}
+	}
+
+	t.Run("regex parser", func(t *testing.T) {
+		parser := &GemfileParser{content: gemfileContent}
+		parsed, err := parser.parseContent()
+		if err != nil {
+			t.Fatalf("parseContent failed: %v", err)
+		}
+		check(t, parsed)
+	})
+
+	t.Run("tree-sitter parser", func(t *testing.T) {
+		parser := NewTreeSitterGemfileParser([]byte(gemfileContent))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+		check(t, parsed)
+	})
+}
+
+func TestInlineSourceOverridesBlock(t *testing.T) {
+	gemfileContent := fmt.Sprintf(`source 'https://gem.coop' do
+  gem 'inside_block'
+  gem 'inline_override', source: '%s'
+end
+
+gem 'outside_block'
+`, rubyChinaURL)
+
+	assertSources := func(t *testing.T, parsed *ParsedGemfile) {
+		t.Helper()
+
+		inside := findGem(parsed.Dependencies, "inside_block")
+		if inside == nil || inside.Source == nil {
+			t.Fatalf("expected inside_block to inherit block source")
+		}
+		if inside.Source.URL != "https://gem.coop" {
+			t.Errorf("inside_block expected source https://gem.coop, got %s", inside.Source.URL)
+		}
+
+		override := findGem(parsed.Dependencies, "inline_override")
+		if override == nil || override.Source == nil {
+			t.Fatalf("expected inline_override to have inline source")
+		}
+		if override.Source.Type != rubygemsSource {
+			t.Errorf("inline_override expected source type rubygems, got %s", override.Source.Type)
+		}
+		if override.Source.URL != rubyChinaURL {
+			t.Errorf("inline_override expected source %s, got %s", rubyChinaURL, override.Source.URL)
+		}
+
+		outside := findGem(parsed.Dependencies, "outside_block")
+		if outside == nil {
+			t.Fatalf("expected outside_block gem to be parsed")
+		}
+		if outside.Source != nil {
+			t.Errorf("outside_block expected no source, got %+v", outside.Source)
+		}
+	}
+
+	t.Run("regex parser", func(t *testing.T) {
+		parser := &GemfileParser{content: gemfileContent}
+		parsed, err := parser.parseContent()
+		if err != nil {
+			t.Fatalf("parseContent failed: %v", err)
+		}
+		assertSources(t, parsed)
+	})
+
+	t.Run("tree-sitter parser", func(t *testing.T) {
+		parser := NewTreeSitterGemfileParser([]byte(gemfileContent))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+		assertSources(t, parsed)
+	})
+}
+
 // Helper functions
 func stringPtr(s string) *string {
 	return &s
@@ -257,7 +362,7 @@ func checkGemDependency(t *testing.T, dep *GemDependency, expectedGems map[strin
 
 func TestSourceBlocks(t *testing.T) {
 	// Create a test Gemfile with source blocks
-	testGemfile := `# Test Gemfile with source blocks
+	testGemfile := fmt.Sprintf(`# Test Gemfile with source blocks
 source 'https://rubygems.org'
 
 ruby '3.2.0'
@@ -273,7 +378,7 @@ end
 gem 'rack'
 gem 'puma', '>= 5.0'
 
-source 'https://private.gems.example.com' do
+source '%s' do
   gem 'private_gem'
   gem 'another_private', require: false
 end
@@ -287,7 +392,7 @@ source 'https://gem.coop' do
   gem 'custom_gem'
   gem 'git_gem', github: 'user/repo'
 end
-`
+`, rubyChinaURL)
 
 	// Write to temp file
 	tmpDir := t.TempDir()
@@ -304,7 +409,7 @@ end
 		t.Fatalf("Failed to parse Gemfile: %v", err)
 	}
 
-	// Test source parsing - should have 4 sources (rubygems.org + 2x gem.coop + private.gems)
+	// Test source parsing - should have 4 sources (rubygems.org + 2x gem.coop + gems.ruby-china.com)
 	expectedSourceCount := 4
 	if len(parsed.Sources) != expectedSourceCount {
 		t.Errorf("Expected %d sources, got %d", expectedSourceCount, len(parsed.Sources))
@@ -318,14 +423,14 @@ end
 	}{
 		"rake":            {hasSource: false}, // No source block, should be nil
 		"rails":           {hasSource: false}, // No source block, should be nil
-		"minitest":        {hasSource: true, sourceURL: "https://gem.coop", sourceType: "rubygems"},
-		"rspec":           {hasSource: true, sourceURL: "https://gem.coop", sourceType: "rubygems"},
+		"minitest":        {hasSource: true, sourceURL: "https://gem.coop", sourceType: rubygemsSource},
+		"rspec":           {hasSource: true, sourceURL: "https://gem.coop", sourceType: rubygemsSource},
 		"rack":            {hasSource: false}, // Outside source block, should be nil
 		"puma":            {hasSource: false}, // Outside source block, should be nil
-		"private_gem":     {hasSource: true, sourceURL: "https://private.gems.example.com", sourceType: "rubygems"},
-		"another_private": {hasSource: true, sourceURL: "https://private.gems.example.com", sourceType: "rubygems"},
+		"private_gem":     {hasSource: true, sourceURL: rubyChinaURL, sourceType: rubygemsSource},
+		"another_private": {hasSource: true, sourceURL: rubyChinaURL, sourceType: rubygemsSource},
 		"rubocop":         {hasSource: false}, // In group block, not source block
-		"custom_gem":      {hasSource: true, sourceURL: "https://gem.coop", sourceType: "rubygems"},
+		"custom_gem":      {hasSource: true, sourceURL: "https://gem.coop", sourceType: rubygemsSource},
 		"git_gem":         {hasSource: true, sourceURL: "https://github.com/user/repo.git", sourceType: "git"}, // Explicit git source overrides
 	}
 
