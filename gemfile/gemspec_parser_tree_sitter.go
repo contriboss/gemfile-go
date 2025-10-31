@@ -10,15 +10,17 @@ import (
 
 // TreeSitterGemspecParser handles parsing of .gemspec files using tree-sitter
 type TreeSitterGemspecParser struct {
-	content []byte
-	helper  *RubyASTHelper
+	content   []byte
+	helper    *RubyASTHelper
+	variables map[string]string // Track variable assignments
 }
 
 // NewTreeSitterGemspecParser creates a new tree-sitter based gemspec parser
 func NewTreeSitterGemspecParser(content []byte) *TreeSitterGemspecParser {
 	return &TreeSitterGemspecParser{
-		content: content,
-		helper:  NewRubyASTHelper(content),
+		content:   content,
+		helper:    NewRubyASTHelper(content),
+		variables: make(map[string]string),
 	}
 }
 
@@ -56,6 +58,12 @@ func (p *TreeSitterGemspecParser) ParseWithTreeSitter() (*GemspecFile, error) {
 
 // extractGemspecData walks the AST to extract gemspec data
 func (p *TreeSitterGemspecParser) extractGemspecData(node *tree_sitter.Node, gemspec *GemspecFile) {
+	// Parse variable assignments first (e.g., rails_version = '~> 8.1.0')
+	if node.Kind() == nodeAssignment {
+		fmt.Printf("DEBUG GEMSPEC: Found assignment node\n")
+		p.processVariableAssignment(node)
+	}
+
 	// Look for Gem::Specification.new block
 	if p.isGemSpecBlock(node) {
 		// Process the block content
@@ -176,9 +184,11 @@ func (p *TreeSitterGemspecParser) processBlockBody(node *tree_sitter.Node, gemsp
 
 // processStatement processes individual statements in the block
 func (p *TreeSitterGemspecParser) processStatement(node *tree_sitter.Node, gemspec *GemspecFile) {
-	// Handle assignment statements like spec.name = "value"
+	// Handle assignment statements like spec.name = "value" or rails_version = "~> 8.1.0"
 	if node.Kind() == nodeAssignment {
+		// Try both: spec property assignments and variable assignments
 		p.processAssignment(node, gemspec)
+		p.processVariableAssignment(node)
 		return
 	}
 
@@ -387,7 +397,11 @@ func (p *TreeSitterGemspecParser) extractValue(node *tree_sitter.Node) string {
 		return strings.Trim(text, `'"`)
 	case nodeStringContent:
 		return p.getNodeText(node)
-	case nodeIdentifier, nodeConstant:
+	case nodeIdentifier:
+		// For identifiers, check if it's a variable reference and expand it
+		varName := p.getNodeText(node)
+		return p.expandVariable(varName)
+	case nodeConstant:
 		return p.getNodeText(node)
 	case nodeScopeResolution:
 		// For things like MyGem::VERSION
@@ -493,4 +507,49 @@ func (p *TreeSitterGemspecParser) extractMetadataKey(node *tree_sitter.Node) str
 // getNodeText returns the text content of a node
 func (p *TreeSitterGemspecParser) getNodeText(node *tree_sitter.Node) string {
 	return p.helper.GetNodeText(node)
+}
+
+// processVariableAssignment parses variable assignments like: rails_version = '~> 8.1.0'
+func (p *TreeSitterGemspecParser) processVariableAssignment(node *tree_sitter.Node) {
+	if node == nil {
+		return
+	}
+
+	fmt.Printf("DEBUG GEMSPEC: Assignment has %d children\n", node.ChildCount())
+
+	// Assignment node structure: left = right
+	// First child is typically the variable name (identifier)
+	// Last child is typically the value (string, etc.)
+	var varName, varValue string
+
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		kind := child.Kind()
+		text := p.getNodeText(child)
+		fmt.Printf("DEBUG GEMSPEC:   Child %d: kind=%s text=%s\n", i, kind, text)
+
+		if kind == nodeIdentifier && varName == "" {
+			varName = text
+		} else if kind == nodeString {
+			// Extract string value
+			varValue = p.extractValue(child)
+		}
+	}
+
+	fmt.Printf("DEBUG GEMSPEC: varName=%s varValue=%s\n", varName, varValue)
+
+	if varName != "" && varValue != "" {
+		p.variables[varName] = varValue
+		// Debug: print variable assignments
+		fmt.Printf("DEBUG GEMSPEC: Variable assigned: %s = %s\n", varName, varValue)
+	}
+}
+
+// expandVariable expands a variable reference to its value
+// Returns the value if the input is a variable name, otherwise returns the input unchanged
+func (p *TreeSitterGemspecParser) expandVariable(input string) string {
+	if value, exists := p.variables[input]; exists {
+		return value
+	}
+	return input
 }

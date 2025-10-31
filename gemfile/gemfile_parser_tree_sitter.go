@@ -13,6 +13,7 @@ type TreeSitterGemfileParser struct {
 	content      []byte
 	helper       *RubyASTHelper
 	contextStack *parserContextStack
+	variables    map[string]string // Track variable assignments
 }
 
 // parserContext tracks the current parsing context (groups, platforms, sources, conditions)
@@ -72,6 +73,7 @@ func NewTreeSitterGemfileParser(content []byte) *TreeSitterGemfileParser {
 		content:      content,
 		helper:       NewRubyASTHelper(content),
 		contextStack: newParserContextStack(),
+		variables:    make(map[string]string),
 	}
 }
 
@@ -114,6 +116,14 @@ func (p *TreeSitterGemfileParser) extractGemfileData(node *tree_sitter.Node, gem
 
 	// Process different node types
 	switch kind {
+	case nodeAssignment:
+		// Parse variable assignments like: rails_version = '~> 8.1.0'
+		p.processVariableAssignment(node)
+		// Still traverse children
+		for i := uint(0); i < node.ChildCount(); i++ {
+			p.extractGemfileData(node.Child(i), gemfile)
+		}
+
 	case nodeCall, nodeMethodCall:
 		// processCall will handle traversal for special methods (gem, group, etc.)
 		// and return true if it handled the node completely
@@ -189,7 +199,9 @@ func (p *TreeSitterGemfileParser) processGem(node *tree_sitter.Node, gemfile *Pa
 	for i := 1; i < len(args); i++ {
 		// Skip if it looks like an option hash
 		if !strings.Contains(args[i], ":") {
-			dep.Constraints = append(dep.Constraints, args[i])
+			// Expand variables in constraints (e.g., rails_version -> '~> 8.1.0')
+			constraint := p.expandVariable(args[i])
+			dep.Constraints = append(dep.Constraints, constraint)
 		}
 	}
 
@@ -359,11 +371,20 @@ func (p *TreeSitterGemfileParser) extractArguments(node *tree_sitter.Node) []str
 		return args
 	}
 
-	// Extract string arguments
+	// Extract string arguments and identifiers (for variables)
 	for i := uint(0); i < argList.ChildCount(); i++ {
 		child := argList.Child(i)
-		if child.Kind() == nodeString {
+		kind := child.Kind()
+
+		switch kind {
+		case nodeString:
 			value := p.helper.ExtractStringValue(child)
+			args = append(args, value)
+		case nodeIdentifier:
+			// Handle variable references (e.g., rails_version)
+			varName := p.helper.GetNodeText(child)
+			// Expand variable to its value if it exists
+			value := p.expandVariable(varName)
 			args = append(args, value)
 		}
 	}
@@ -548,4 +569,43 @@ func (p *TreeSitterGemfileParser) extractArraySymbols(arrayNode *tree_sitter.Nod
 	}
 
 	return symbols
+}
+
+// processVariableAssignment parses variable assignments like: rails_version = '~> 8.1.0'
+func (p *TreeSitterGemfileParser) processVariableAssignment(node *tree_sitter.Node) {
+	if node == nil || node.ChildCount() < 2 {
+		return
+	}
+
+	// Assignment node structure: left = right
+	// First child is typically the variable name (identifier)
+	// Last child is typically the value (string, etc.)
+	var varName, varValue string
+
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		kind := child.Kind()
+
+		if kind == nodeIdentifier && varName == "" {
+			varName = p.helper.GetNodeText(child)
+		} else if kind == nodeString {
+			// Extract string value
+			varValue = p.helper.ExtractStringValue(child)
+		}
+	}
+
+	if varName != "" && varValue != "" {
+		p.variables[varName] = varValue
+		// Debug: print variable assignments
+		fmt.Printf("DEBUG: Variable assigned: %s = %s\n", varName, varValue)
+	}
+}
+
+// expandVariable expands a variable reference to its value
+// Returns the value if the input is a variable name, otherwise returns the input unchanged
+func (p *TreeSitterGemfileParser) expandVariable(input string) string {
+	if value, exists := p.variables[input]; exists {
+		return value
+	}
+	return input
 }
