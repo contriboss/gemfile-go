@@ -104,12 +104,10 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 		len(gemfile.Gemspecs) == 0
 
 	if useTreeSitter {
-		fmt.Println("DEBUG: Using tree-sitter parser")
 		return gemfile, nil
 	}
 
 	// Fall back to regex parsing (more battle-tested for edge cases)
-	fmt.Println("DEBUG: Falling back to regex parser")
 	return p.parseContent()
 }
 

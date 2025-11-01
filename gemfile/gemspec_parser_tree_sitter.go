@@ -60,7 +60,6 @@ func (p *TreeSitterGemspecParser) ParseWithTreeSitter() (*GemspecFile, error) {
 func (p *TreeSitterGemspecParser) extractGemspecData(node *tree_sitter.Node, gemspec *GemspecFile) {
 	// Parse variable assignments first (e.g., rails_version = '~> 8.1.0')
 	if node.Kind() == nodeAssignment {
-		fmt.Printf("DEBUG GEMSPEC: Found assignment node\n")
 		p.processVariableAssignment(node)
 	}
 
@@ -515,8 +514,6 @@ func (p *TreeSitterGemspecParser) processVariableAssignment(node *tree_sitter.No
 		return
 	}
 
-	fmt.Printf("DEBUG GEMSPEC: Assignment has %d children\n", node.ChildCount())
-
 	// Assignment node structure: left = right
 	// First child is typically the variable name (identifier)
 	// Last child is typically the value (string, etc.)
@@ -526,7 +523,6 @@ func (p *TreeSitterGemspecParser) processVariableAssignment(node *tree_sitter.No
 		child := node.Child(i)
 		kind := child.Kind()
 		text := p.getNodeText(child)
-		fmt.Printf("DEBUG GEMSPEC:   Child %d: kind=%s text=%s\n", i, kind, text)
 
 		if kind == nodeIdentifier && varName == "" {
 			varName = text
@@ -536,12 +532,8 @@ func (p *TreeSitterGemspecParser) processVariableAssignment(node *tree_sitter.No
 		}
 	}
 
-	fmt.Printf("DEBUG GEMSPEC: varName=%s varValue=%s\n", varName, varValue)
-
 	if varName != "" && varValue != "" {
 		p.variables[varName] = varValue
-		// Debug: print variable assignments
-		fmt.Printf("DEBUG GEMSPEC: Variable assigned: %s = %s\n", varName, varValue)
 	}
 }
 

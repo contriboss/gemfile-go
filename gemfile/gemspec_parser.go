@@ -79,12 +79,10 @@ func (p *GemspecParser) Parse() (*GemspecFile, error) {
 	tsParser := NewTreeSitterGemspecParser(content)
 	gemspec, err := tsParser.ParseWithTreeSitter()
 	if err == nil && gemspec.Name != "" {
-		fmt.Printf("DEBUG: Using tree-sitter parser for gemspec: %s\n", p.filepath)
 		return gemspec, nil
 	}
 
 	// If tree-sitter fails or doesn't find data, try Ruby
-	fmt.Printf("DEBUG: Falling back to Ruby parser for gemspec: %s\n", p.filepath)
 	return p.parseWithRuby()
 }
 

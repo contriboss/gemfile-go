@@ -596,8 +596,6 @@ func (p *TreeSitterGemfileParser) processVariableAssignment(node *tree_sitter.No
 
 	if varName != "" && varValue != "" {
 		p.variables[varName] = varValue
-		// Debug: print variable assignments
-		fmt.Printf("DEBUG: Variable assigned: %s = %s\n", varName, varValue)
 	}
 }
 
