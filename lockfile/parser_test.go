@@ -12,6 +12,7 @@ const (
 	testRailsGem     = "rails"
 	testVersion      = "0.1.0"
 	stateMachinesGem = "state_machines"
+	testTagV060      = "v0.6.0"
 )
 
 func TestParse(t *testing.T) {
@@ -112,7 +113,7 @@ func TestParseGitLockfile(t *testing.T) {
 	}
 
 	first := lockfile.GitSpecs[0]
-	if first.Name != "no_fly_list" || first.Tag != "v0.6.0" {
+	if first.Name != "no_fly_list" || first.Tag != testTagV060 {
 		t.Errorf("unexpected first git gem: %+v", first)
 	}
 
@@ -378,5 +379,183 @@ func validatePathGemMethods(t *testing.T, lockfile *Lockfile) {
 	_, err := cms.SemVer()
 	if err != nil {
 		t.Errorf("PATH gem SemVer parsing failed: %v", err)
+	}
+}
+
+func TestParseMergeConflict(t *testing.T) {
+	conflictContent := `GEM
+  remote: https://rubygems.org/
+  specs:
+<<<<<<< HEAD
+    rake (13.0.0)
+=======
+    rake (13.0.1)
+>>>>>>> branch
+`
+	_, err := Parse(strings.NewReader(conflictContent))
+	if err == nil {
+		t.Error("Expected error for merge conflict, got nil")
+	}
+	if !strings.Contains(err.Error(), "merge conflicts") {
+		t.Errorf("Expected merge conflict error, got: %v", err)
+	}
+}
+
+func TestParseChecksumsSection(t *testing.T) {
+	data, err := os.ReadFile("../testdata/checksums.lock")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+
+	lockfile, err := Parse(strings.NewReader(string(data)))
+	if err != nil {
+		t.Fatalf("Failed to parse lockfile: %v", err)
+	}
+
+	// Test that checksums were parsed
+	if len(lockfile.Checksums) == 0 {
+		t.Error("Expected checksums to be parsed")
+	}
+
+	// Check specific checksum (rake from real Bundler-generated fixture)
+	rakeChecksums, exists := lockfile.Checksums["rake-13.3.1"]
+	if !exists {
+		t.Error("Expected checksum for rake-13.3.1")
+	} else if len(rakeChecksums) != 1 {
+		t.Errorf("Expected 1 checksum for rake, got %d", len(rakeChecksums))
+	} else if rakeChecksums[0].Algorithm != "sha256" {
+		t.Errorf("Expected sha256 algorithm, got %s", rakeChecksums[0].Algorithm)
+	}
+}
+
+func TestParseRubyVersion(t *testing.T) {
+	data, err := os.ReadFile("../testdata/ruby_version.lock")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+
+	lockfile, err := Parse(strings.NewReader(string(data)))
+	if err != nil {
+		t.Fatalf("Failed to parse lockfile: %v", err)
+	}
+
+	if lockfile.RubyVersion != "ruby 3.4.8" {
+		t.Errorf("Expected 'ruby 3.4.8', got '%s'", lockfile.RubyVersion)
+	}
+}
+
+func TestParseGitTag(t *testing.T) {
+	data, err := os.ReadFile("../testdata/git_source.lock")
+	if err != nil {
+		t.Fatalf("failed to read fixture: %v", err)
+	}
+
+	lockfile, err := Parse(strings.NewReader(string(data)))
+	if err != nil {
+		t.Fatalf("Failed to parse lockfile: %v", err)
+	}
+
+	if len(lockfile.GitSpecs) == 0 {
+		t.Fatal("Expected git specs")
+	}
+
+	noFlyList := lockfile.GitSpecs[0]
+	if noFlyList.Tag != testTagV060 {
+		t.Errorf("Expected tag '%s', got '%s'", testTagV060, noFlyList.Tag)
+	}
+	if noFlyList.Revision != "579dbdc4fd2441790ed6a7da38f032aa40d1b261" {
+		t.Errorf("Expected revision '579dbdc4fd2441790ed6a7da38f032aa40d1b261', got '%s'", noFlyList.Revision)
+	}
+}
+
+func TestParseGitSubmodules(t *testing.T) {
+	content := `GIT
+  remote: https://github.com/example/repo.git
+  revision: abc123
+  submodules: true
+  specs:
+    my_gem (1.0.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  my_gem!
+
+BUNDLED WITH
+   2.5.0
+`
+	lockfile, err := Parse(strings.NewReader(content))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if len(lockfile.GitSpecs) != 1 {
+		t.Fatalf("Expected 1 git spec, got %d", len(lockfile.GitSpecs))
+	}
+
+	if !lockfile.GitSpecs[0].Submodules {
+		t.Error("Expected Submodules to be true")
+	}
+}
+
+func TestParseGitGlob(t *testing.T) {
+	content := `GIT
+  remote: https://github.com/example/repo.git
+  revision: abc123
+  glob: {,*,*/*}.gemspec
+  specs:
+    my_gem (1.0.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  my_gem!
+
+BUNDLED WITH
+   2.5.0
+`
+	lockfile, err := Parse(strings.NewReader(content))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if len(lockfile.GitSpecs) != 1 {
+		t.Fatalf("Expected 1 git spec, got %d", len(lockfile.GitSpecs))
+	}
+
+	if lockfile.GitSpecs[0].Glob != "{,*,*/*}.gemspec" {
+		t.Errorf("Expected glob '{,*,*/*}.gemspec', got '%s'", lockfile.GitSpecs[0].Glob)
+	}
+}
+
+func TestParsePathGlob(t *testing.T) {
+	content := `PATH
+  remote: ../my_gem
+  glob: *.gemspec
+  specs:
+    my_gem (1.0.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  my_gem!
+
+BUNDLED WITH
+   2.5.0
+`
+	lockfile, err := Parse(strings.NewReader(content))
+	if err != nil {
+		t.Fatalf("Failed to parse: %v", err)
+	}
+
+	if len(lockfile.PathSpecs) != 1 {
+		t.Fatalf("Expected 1 path spec, got %d", len(lockfile.PathSpecs))
+	}
+
+	if lockfile.PathSpecs[0].Glob != "*.gemspec" {
+		t.Errorf("Expected glob '*.gemspec', got '%s'", lockfile.PathSpecs[0].Glob)
 	}
 }

@@ -303,6 +303,9 @@ func TestRoundTrip(t *testing.T) {
 		"../testdata/Gemfile.lock",
 		"../testdata/git.lock",
 		"../testdata/platforms.lock",
+		"../testdata/checksums.lock",
+		"../testdata/ruby_version.lock",
+		"../testdata/git_source.lock",
 	}
 
 	for _, testFile := range testFiles {
@@ -351,6 +354,16 @@ func TestRoundTrip(t *testing.T) {
 			if original.BundledWith != reparsed.BundledWith {
 				t.Errorf("BundledWith mismatch: original=%s, reparsed=%s",
 					original.BundledWith, reparsed.BundledWith)
+			}
+
+			if original.RubyVersion != reparsed.RubyVersion {
+				t.Errorf("RubyVersion mismatch: original=%s, reparsed=%s",
+					original.RubyVersion, reparsed.RubyVersion)
+			}
+
+			if len(original.Checksums) != len(reparsed.Checksums) {
+				t.Errorf("Checksums count mismatch: original=%d, reparsed=%d",
+					len(original.Checksums), len(reparsed.Checksums))
 			}
 
 			// Verify specific gems are preserved
