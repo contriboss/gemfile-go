@@ -34,11 +34,14 @@ func (w *LockfileWriter) Write(lf *Lockfile, writer io.Writer) error {
 	defer buf.Flush()
 
 	sections := []func(*Lockfile, *bufio.Writer) error{
-		w.writeGemSection,
 		w.writeGitSection,
 		w.writePathSection,
+		w.writePluginSection,
+		w.writeGemSection,
 		w.writePlatformsSection,
 		w.writeDependenciesSection,
+		w.writeChecksumsSection,
+		w.writeRubyVersionSection,
 		w.writeBundledWithSection,
 	}
 
@@ -165,26 +168,32 @@ func (w *LockfileWriter) writeGitSection(lf *Lockfile, buf *bufio.Writer) error 
 		return nil
 	}
 
-	// Group specs by source identity (remote + revision + branch + tag)
+	// Group specs by source identity (remote + revision + branch + tag + ref + submodules + glob)
 	type gitSource struct {
-		remote   string
-		revision string
-		branch   string
-		tag      string
-		specs    []GitGemSpec
+		remote     string
+		revision   string
+		branch     string
+		tag        string
+		ref        string
+		submodules bool
+		glob       string
+		specs      []GitGemSpec
 	}
 
 	sourceMap := make(map[string]*gitSource)
 	for i := range lf.GitSpecs {
 		spec := &lf.GitSpecs[i]
-		key := fmt.Sprintf("%s|%s|%s|%s", spec.Remote, spec.Revision, spec.Branch, spec.Tag)
+		key := fmt.Sprintf("%s|%s|%s|%s|%s|%v|%s", spec.Remote, spec.Revision, spec.Branch, spec.Tag, spec.Ref, spec.Submodules, spec.Glob)
 		if sourceMap[key] == nil {
 			sourceMap[key] = &gitSource{
-				remote:   spec.Remote,
-				revision: spec.Revision,
-				branch:   spec.Branch,
-				tag:      spec.Tag,
-				specs:    []GitGemSpec{},
+				remote:     spec.Remote,
+				revision:   spec.Revision,
+				branch:     spec.Branch,
+				tag:        spec.Tag,
+				ref:        spec.Ref,
+				submodules: spec.Submodules,
+				glob:       spec.Glob,
+				specs:      []GitGemSpec{},
 			}
 		}
 		sourceMap[key].specs = append(sourceMap[key].specs, *spec)
@@ -217,6 +226,21 @@ func (w *LockfileWriter) writeGitSection(lf *Lockfile, buf *bufio.Writer) error 
 		}
 		if src.tag != "" {
 			if _, err := buf.WriteString(indent2 + "tag: " + src.tag + "\n"); err != nil {
+				return err
+			}
+		}
+		if src.ref != "" {
+			if _, err := buf.WriteString(indent2 + "ref: " + src.ref + "\n"); err != nil {
+				return err
+			}
+		}
+		if src.submodules {
+			if _, err := buf.WriteString(indent2 + "submodules: true\n"); err != nil {
+				return err
+			}
+		}
+		if src.glob != "" {
+			if _, err := buf.WriteString(indent2 + "glob: " + src.glob + "\n"); err != nil {
 				return err
 			}
 		}
@@ -269,22 +293,25 @@ func (w *LockfileWriter) writePathSection(lf *Lockfile, buf *bufio.Writer) error
 		return nil
 	}
 
-	// Group specs by path
+	// Group specs by path + glob
 	type pathSource struct {
 		remote string
+		glob   string
 		specs  []PathGemSpec
 	}
 
 	sourceMap := make(map[string]*pathSource)
 	for i := range lf.PathSpecs {
 		spec := &lf.PathSpecs[i]
-		if sourceMap[spec.Remote] == nil {
-			sourceMap[spec.Remote] = &pathSource{
+		key := spec.Remote + "|" + spec.Glob
+		if sourceMap[key] == nil {
+			sourceMap[key] = &pathSource{
 				remote: spec.Remote,
+				glob:   spec.Glob,
 				specs:  []PathGemSpec{},
 			}
 		}
-		sourceMap[spec.Remote].specs = append(sourceMap[spec.Remote].specs, *spec)
+		sourceMap[key].specs = append(sourceMap[key].specs, *spec)
 	}
 
 	// Sort sources by remote
@@ -303,6 +330,11 @@ func (w *LockfileWriter) writePathSection(lf *Lockfile, buf *bufio.Writer) error
 		}
 		if _, err := buf.WriteString(indent2 + "remote: " + src.remote + "\n"); err != nil {
 			return err
+		}
+		if src.glob != "" {
+			if _, err := buf.WriteString(indent2 + "glob: " + src.glob + "\n"); err != nil {
+				return err
+			}
 		}
 		if _, err := buf.WriteString(indent2 + "specs:\n"); err != nil {
 			return err
@@ -433,6 +465,175 @@ func (w *LockfileWriter) writeDependency(buf *bufio.Writer, dep *Dependency, ind
 	if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent, dep.Name, constraints); err != nil {
 		return err
 	}
+	return nil
+}
+
+// writeChecksumsSection writes the CHECKSUMS section.
+func (w *LockfileWriter) writeChecksumsSection(lf *Lockfile, buf *bufio.Writer) error {
+	if len(lf.Checksums) == 0 {
+		return nil
+	}
+
+	if _, err := buf.WriteString("\nCHECKSUMS\n"); err != nil {
+		return err
+	}
+
+	// Sort lock names for consistent output
+	var lockNames []string
+	for name := range lf.Checksums {
+		lockNames = append(lockNames, name)
+	}
+	slices.Sort(lockNames)
+
+	for _, lockName := range lockNames {
+		checksums := lf.Checksums[lockName]
+		// Parse lock_name back to name (version[-platform])
+		// Lock name format: gem_name-version or gem_name-version-platform
+		parts := strings.SplitN(lockName, "-", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		name := parts[0]
+		versionPlatform := parts[1]
+
+		if len(checksums) > 0 {
+			checksumStr := ChecksumsToLock(checksums)
+			if _, err := fmt.Fprintf(buf, "%s%s (%s) %s\n", indent2, name, versionPlatform, checksumStr); err != nil {
+				return err
+			}
+		} else {
+			// Entry exists but no checksum
+			if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent2, name, versionPlatform); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// writeRubyVersionSection writes the RUBY VERSION section.
+func (w *LockfileWriter) writeRubyVersionSection(lf *Lockfile, buf *bufio.Writer) error {
+	if lf.RubyVersion == "" {
+		return nil
+	}
+
+	if _, err := buf.WriteString("\nRUBY VERSION\n"); err != nil {
+		return err
+	}
+	if _, err := buf.WriteString(indent2 + lf.RubyVersion + "\n"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// writePluginSection writes the PLUGIN SOURCE section.
+//
+//nolint:gocyclo // Complexity from plugin source metadata handling
+func (w *LockfileWriter) writePluginSection(lf *Lockfile, buf *bufio.Writer) error {
+	if len(lf.PluginSpecs) == 0 {
+		return nil
+	}
+
+	// Group specs by source identity (remote + type)
+	type pluginSource struct {
+		remote  string
+		ptype   string
+		options map[string]string
+		specs   []PluginSpec
+	}
+
+	sourceMap := make(map[string]*pluginSource)
+	for i := range lf.PluginSpecs {
+		spec := &lf.PluginSpecs[i]
+		key := fmt.Sprintf("%s|%s", spec.Remote, spec.Type)
+		if sourceMap[key] == nil {
+			sourceMap[key] = &pluginSource{
+				remote:  spec.Remote,
+				ptype:   spec.Type,
+				options: spec.Options,
+				specs:   []PluginSpec{},
+			}
+		}
+		sourceMap[key].specs = append(sourceMap[key].specs, *spec)
+	}
+
+	// Sort sources by remote
+	var sources []*pluginSource
+	for _, src := range sourceMap {
+		sources = append(sources, src)
+	}
+	slices.SortFunc(sources, func(a, b *pluginSource) int {
+		return strings.Compare(a.remote, b.remote)
+	})
+
+	// Write each plugin source block
+	for _, src := range sources {
+		if _, err := buf.WriteString("\nPLUGIN SOURCE\n"); err != nil {
+			return err
+		}
+		if _, err := buf.WriteString(indent2 + "remote: " + src.remote + "\n"); err != nil {
+			return err
+		}
+		if src.ptype != "" {
+			if _, err := buf.WriteString(indent2 + "type: " + src.ptype + "\n"); err != nil {
+				return err
+			}
+		}
+		// Write additional options
+		if len(src.options) > 0 {
+			var optKeys []string
+			for k := range src.options {
+				optKeys = append(optKeys, k)
+			}
+			slices.Sort(optKeys)
+			for _, k := range optKeys {
+				if _, err := fmt.Fprintf(buf, "%s%s: %s\n", indent2, k, src.options[k]); err != nil {
+					return err
+				}
+			}
+		}
+		if _, err := buf.WriteString(indent2 + "specs:\n"); err != nil {
+			return err
+		}
+
+		// Sort specs within source
+		slices.SortFunc(src.specs, func(a, b PluginSpec) int {
+			return strings.Compare(a.Name, b.Name)
+		})
+
+		for i := range src.specs {
+			if err := w.writePluginSpec(buf, &src.specs[i]); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// writePluginSpec writes a single plugin spec with its dependencies.
+//
+//nolint:dupl // Similar to writeGitGemSpec/writePathGemSpec but handles different type
+func (w *LockfileWriter) writePluginSpec(buf *bufio.Writer, spec *PluginSpec) error {
+	if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent4, spec.Name, spec.Version); err != nil {
+		return err
+	}
+
+	// Write dependencies sorted by name
+	deps := make([]Dependency, len(spec.Dependencies))
+	copy(deps, spec.Dependencies)
+	slices.SortFunc(deps, func(a, b Dependency) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	for i := range deps {
+		if err := w.writeDependency(buf, &deps[i], indent6); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
