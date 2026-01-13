@@ -7,20 +7,16 @@ import (
 	"strings"
 )
 
-var (
-	darwinPlatformVersionRegex = regexp.MustCompile(`^(.*-darwin)(\d+)$`)
-)
+var darwinPlatformVersionRegex = regexp.MustCompile(`^(.*-darwin)(\d+)$`)
 
 func normalizePlatformForLockfileOutput(platform string) string {
 	normalized := strings.ToLower(strings.TrimSpace(platform))
 	if normalized == "" {
 		return ""
 	}
-
 	if matches := darwinPlatformVersionRegex.FindStringSubmatch(normalized); matches != nil {
 		normalized = matches[1] + "-" + matches[2]
 	}
-
 	return normalized
 }
 

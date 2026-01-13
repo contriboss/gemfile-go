@@ -417,18 +417,21 @@ func (w *LockfileWriter) writePlatformsSection(lf *Lockfile, buf *bufio.Writer) 
 		return nil
 	}
 
-	if _, err := buf.WriteString("\nPLATFORMS\n"); err != nil {
-		return err
-	}
-
-	// Deduplicate and sort platforms
+	// Deduplicate and sort platforms (excluding ruby, which Bundler omits).
 	platformSet := make(map[string]bool)
 	for _, p := range lf.Platforms {
 		normalized := normalizePlatformForLockfileOutput(p)
-		if normalized == "" {
+		if normalized == "" || normalized == "ruby" {
 			continue
 		}
 		platformSet[normalized] = true
+	}
+	if len(platformSet) == 0 {
+		return nil
+	}
+
+	if _, err := buf.WriteString("\nPLATFORMS\n"); err != nil {
+		return err
 	}
 
 	platforms := make([]string, 0, len(platformSet))

@@ -531,13 +531,6 @@ func TestIndentationAndFormatting(t *testing.T) {
 			t.Errorf("Line %d: gem dependency should have 6-space indent: %q", i+1, line)
 		}
 
-		// Platform entries should have 2-space indent
-		if strings.TrimSpace(line) == "ruby" && strings.HasPrefix(buf.String()[strings.Index(buf.String(), line)-20:], "PLATFORMS") {
-			if !strings.HasPrefix(line, "  ruby") {
-				t.Errorf("Line %d: platform should have 2-space indent: %q", i+1, line)
-			}
-		}
-
 		// Top-level dependencies should have 2-space indent
 		if strings.Contains(line, "rails (~> 8.1.0.rc1)") && !strings.HasPrefix(line, "  rails") {
 			t.Errorf("Line %d: dependency should have 2-space indent: %q", i+1, line)
@@ -572,8 +565,8 @@ func TestPlatformDeduplication(t *testing.T) {
 	rubyCount := strings.Count(output, "  ruby\n")
 	linuxCount := strings.Count(output, "  x86_64-linux\n")
 
-	if rubyCount != 1 {
-		t.Errorf("Expected 'ruby' platform to appear once, found %d times", rubyCount)
+	if rubyCount != 0 {
+		t.Errorf("Expected 'ruby' platform to be omitted, found %d times", rubyCount)
 	}
 	if linuxCount != 1 {
 		t.Errorf("Expected 'x86_64-linux' platform to appear once, found %d times", linuxCount)
