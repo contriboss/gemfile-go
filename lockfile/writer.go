@@ -2,6 +2,7 @@ package lockfile
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -45,19 +46,33 @@ func (w *LockfileWriter) Write(lf *Lockfile, writer io.Writer) error {
 		w.writeBundledWithSection,
 	}
 
-	firstSection := true
+	wroteAny := false
 	for _, writeSection := range sections {
-		// Check if section has content before writing
-		if err := writeSection(lf, buf); err != nil {
+		var sectionBuf bytes.Buffer
+		sectionWriter := bufio.NewWriter(&sectionBuf)
+		if err := writeSection(lf, sectionWriter); err != nil {
 			return err
 		}
-		// Add blank line between sections (except before first)
-		if !firstSection {
+		if err := sectionWriter.Flush(); err != nil {
+			return err
+		}
+		section := sectionBuf.String()
+		if section == "" {
+			continue
+		}
+		section = strings.TrimLeft(section, "\n")
+		if section == "" {
+			continue
+		}
+		if wroteAny {
 			if _, err := buf.WriteString("\n"); err != nil {
 				return err
 			}
 		}
-		firstSection = false
+		if _, err := buf.WriteString(section); err != nil {
+			return err
+		}
+		wroteAny = true
 	}
 
 	return buf.Flush()
@@ -76,6 +91,8 @@ func (w *LockfileWriter) WriteFile(lf *Lockfile, path string) error {
 
 // writeGemSection writes the GEM section(s) with sorted specs.
 // If gems have different SourceURLs, writes multiple GEM sections.
+//
+//nolint:gocyclo // Section writing mirrors Bundler's nested layout rules.
 func (w *LockfileWriter) writeGemSection(lf *Lockfile, buf *bufio.Writer) error {
 	if len(lf.GemSpecs) == 0 {
 		return nil
@@ -121,7 +138,21 @@ func (w *LockfileWriter) writeGemSection(lf *Lockfile, buf *bufio.Writer) error 
 		// Sort specs alphabetically by name
 		specs := gemsBySource[source]
 		slices.SortFunc(specs, func(a, b GemSpec) int {
-			return strings.Compare(a.Name, b.Name)
+			if a.Name != b.Name {
+				return strings.Compare(a.Name, b.Name)
+			}
+			aVer := a.Version
+			if a.Platform != "" {
+				aVer = aVer + "-" + a.Platform
+			}
+			bVer := b.Version
+			if b.Platform != "" {
+				bVer = bVer + "-" + b.Platform
+			}
+			if aVer != bVer {
+				return strings.Compare(aVer, bVer)
+			}
+			return strings.Compare(a.Platform, b.Platform)
 		})
 
 		for j := range specs {
@@ -303,10 +334,11 @@ func (w *LockfileWriter) writePathSection(lf *Lockfile, buf *bufio.Writer) error
 	sourceMap := make(map[string]*pathSource)
 	for i := range lf.PathSpecs {
 		spec := &lf.PathSpecs[i]
-		key := spec.Remote + "|" + spec.Glob
+		normalizedRemote := normalizePathRemoteForLockfileOutput(spec.Remote)
+		key := normalizedRemote + "|" + spec.Glob
 		if sourceMap[key] == nil {
 			sourceMap[key] = &pathSource{
-				remote: spec.Remote,
+				remote: normalizedRemote,
 				glob:   spec.Glob,
 				specs:  []PathGemSpec{},
 			}
@@ -392,7 +424,11 @@ func (w *LockfileWriter) writePlatformsSection(lf *Lockfile, buf *bufio.Writer) 
 	// Deduplicate and sort platforms
 	platformSet := make(map[string]bool)
 	for _, p := range lf.Platforms {
-		platformSet[p] = true
+		normalized := normalizePlatformForLockfileOutput(p)
+		if normalized == "" {
+			continue
+		}
+		platformSet[normalized] = true
 	}
 
 	platforms := make([]string, 0, len(platformSet))
@@ -427,8 +463,26 @@ func (w *LockfileWriter) writeDependenciesSection(lf *Lockfile, buf *bufio.Write
 		return strings.Compare(a.Name, b.Name)
 	})
 
+	gitPathSet := make(map[string]bool)
+	for i := range lf.GitSpecs {
+		spec := &lf.GitSpecs[i]
+		if spec.Name != "" {
+			gitPathSet[spec.Name] = true
+		}
+	}
+	for i := range lf.PathSpecs {
+		spec := &lf.PathSpecs[i]
+		if spec.Name != "" {
+			gitPathSet[spec.Name] = true
+		}
+	}
+
 	for i := range deps {
-		if err := w.writeDependency(buf, &deps[i], indent2); err != nil {
+		dep := deps[i]
+		if !strings.HasSuffix(dep.Name, "!") && gitPathSet[dep.Name] {
+			dep.Name += "!"
+		}
+		if err := w.writeDependency(buf, &dep, indent2); err != nil {
 			return err
 		}
 	}
@@ -445,7 +499,7 @@ func (w *LockfileWriter) writeBundledWithSection(lf *Lockfile, buf *bufio.Writer
 	if _, err := buf.WriteString("\nBUNDLED WITH\n"); err != nil {
 		return err
 	}
-	if _, err := buf.WriteString("   " + lf.BundledWith + "\n"); err != nil {
+	if _, err := buf.WriteString("  " + lf.BundledWith + "\n"); err != nil {
 		return err
 	}
 
@@ -454,21 +508,24 @@ func (w *LockfileWriter) writeBundledWithSection(lf *Lockfile, buf *bufio.Writer
 
 // writeDependency writes a single dependency line.
 func (w *LockfileWriter) writeDependency(buf *bufio.Writer, dep *Dependency, indent string) error {
-	if len(dep.Constraints) == 0 {
+	constraints := normalizeConstraintsForLockfile(dep.Constraints)
+	if len(constraints) == 0 {
 		if _, err := buf.WriteString(indent + dep.Name + "\n"); err != nil {
 			return err
 		}
 		return nil
 	}
 
-	constraints := strings.Join(dep.Constraints, ", ")
-	if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent, dep.Name, constraints); err != nil {
+	constraintsStr := strings.Join(constraints, ", ")
+	if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent, dep.Name, constraintsStr); err != nil {
 		return err
 	}
 	return nil
 }
 
 // writeChecksumsSection writes the CHECKSUMS section.
+//
+//nolint:gocyclo // Requires ordering + fallback logic to match Bundler output.
 func (w *LockfileWriter) writeChecksumsSection(lf *Lockfile, buf *bufio.Writer) error {
 	if len(lf.Checksums) == 0 {
 		return nil
@@ -485,25 +542,62 @@ func (w *LockfileWriter) writeChecksumsSection(lf *Lockfile, buf *bufio.Writer) 
 	}
 	slices.Sort(lockNames)
 
+	type lockEntry struct {
+		name            string
+		versionPlatform string
+	}
+
+	lockEntries := make(map[string]lockEntry)
+	addLockEntry := func(name, version, platform string) {
+		if name == "" || version == "" {
+			return
+		}
+		versionPlatform := version
+		lockName := name + "-" + version
+		if platform != "" {
+			versionPlatform = version + "-" + platform
+			lockName = name + "-" + version + "-" + platform
+		}
+		lockEntries[lockName] = lockEntry{
+			name:            name,
+			versionPlatform: versionPlatform,
+		}
+	}
+
+	for i := range lf.GemSpecs {
+		spec := &lf.GemSpecs[i]
+		addLockEntry(spec.Name, spec.Version, spec.Platform)
+	}
+	for i := range lf.GitSpecs {
+		spec := &lf.GitSpecs[i]
+		addLockEntry(spec.Name, spec.Version, "")
+	}
+	for i := range lf.PathSpecs {
+		spec := &lf.PathSpecs[i]
+		addLockEntry(spec.Name, spec.Version, "")
+	}
+
 	for _, lockName := range lockNames {
 		checksums := lf.Checksums[lockName]
-		// Parse lock_name back to name (version[-platform])
-		// Lock name format: gem_name-version or gem_name-version-platform
-		parts := strings.SplitN(lockName, "-", 2)
-		if len(parts) < 2 {
-			continue
+		entry, ok := lockEntries[lockName]
+		if !ok {
+			// Parse lock_name back to name (version[-platform]) as fallback.
+			// Lock name format: gem_name-version or gem_name-version-platform
+			parts := strings.SplitN(lockName, "-", 2)
+			if len(parts) < 2 {
+				continue
+			}
+			entry = lockEntry{name: parts[0], versionPlatform: parts[1]}
 		}
-		name := parts[0]
-		versionPlatform := parts[1]
 
 		if len(checksums) > 0 {
 			checksumStr := ChecksumsToLock(checksums)
-			if _, err := fmt.Fprintf(buf, "%s%s (%s) %s\n", indent2, name, versionPlatform, checksumStr); err != nil {
+			if _, err := fmt.Fprintf(buf, "%s%s (%s) %s\n", indent2, entry.name, entry.versionPlatform, checksumStr); err != nil {
 				return err
 			}
 		} else {
 			// Entry exists but no checksum
-			if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent2, name, versionPlatform); err != nil {
+			if _, err := fmt.Fprintf(buf, "%s%s (%s)\n", indent2, entry.name, entry.versionPlatform); err != nil {
 				return err
 			}
 		}
