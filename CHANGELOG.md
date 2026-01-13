@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/contriboss/gemfile-go/compare/v0.7.1...v0.7.2) (2026-01-13)
+
+
+### Bug Fixes
+
+* dedup should not remove ruby ([e087caa](https://github.com/contriboss/gemfile-go/commit/e087caa5ff21d1b967be5928f76168fa37c52198))
+
 ## [0.7.1](https://github.com/contriboss/gemfile-go/compare/v0.7.0...v0.7.1) (2026-01-13)
 
 
