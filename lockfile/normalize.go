@@ -9,7 +9,6 @@ import (
 
 var (
 	darwinPlatformVersionRegex = regexp.MustCompile(`^(.*-darwin)(\d+)$`)
-	linuxLibcRegex             = regexp.MustCompile(`^(.*-linux)-(gnu|musl)$`)
 )
 
 func normalizePlatformForLockfileOutput(platform string) string {
@@ -20,10 +19,6 @@ func normalizePlatformForLockfileOutput(platform string) string {
 
 	if matches := darwinPlatformVersionRegex.FindStringSubmatch(normalized); matches != nil {
 		normalized = matches[1] + "-" + matches[2]
-	}
-
-	if matches := linuxLibcRegex.FindStringSubmatch(normalized); matches != nil {
-		normalized = matches[1]
 	}
 
 	return normalized
