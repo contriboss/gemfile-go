@@ -461,7 +461,7 @@ func processDependenciesSection(line string, lockfile *Lockfile) {
 
 // processBundledWithSection processes lines in the BUNDLED_WITH section
 func processBundledWithSection(line string, lockfile *Lockfile) {
-	if strings.HasPrefix(line, "   ") {
+	if strings.HasPrefix(line, "  ") {
 		lockfile.BundledWith = strings.TrimSpace(line)
 	}
 }

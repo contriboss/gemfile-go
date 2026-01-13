@@ -132,8 +132,8 @@ func TestWrite(t *testing.T) {
 				},
 			},
 			Dependencies: []Dependency{
-				{Name: "no_fly_list!"},
-				{Name: "state_machines!"},
+				{Name: "no_fly_list"},
+				{Name: "state_machines"},
 			},
 			BundledWith: "2.4.13",
 		}
@@ -181,14 +181,14 @@ func TestWrite(t *testing.T) {
 				{
 					Name:    "my_local_gem",
 					Version: "0.1.0",
-					Remote:  "../gems/my_local_gem",
+					Remote:  "./gems/my_local_gem",
 					Dependencies: []Dependency{
 						{Name: "rails", Constraints: []string{">= 6.0"}},
 					},
 				},
 			},
 			Dependencies: []Dependency{
-				{Name: "my_local_gem!"},
+				{Name: "my_local_gem"},
 			},
 			BundledWith: "2.4.13",
 		}
@@ -206,8 +206,8 @@ func TestWrite(t *testing.T) {
 		if !strings.Contains(output, "PATH\n") {
 			t.Error("Missing PATH section")
 		}
-		if !strings.Contains(output, "remote: ../gems/my_local_gem") {
-			t.Error("Missing path remote")
+		if !strings.Contains(output, "remote: gems/my_local_gem") {
+			t.Error("Path remote was not normalized")
 		}
 		if !strings.Contains(output, "my_local_gem (0.1.0)") {
 			t.Error("Missing path gem spec")
@@ -427,6 +427,31 @@ func TestWriteFile(t *testing.T) {
 	}
 }
 
+func TestWriteChecksumsHyphenatedGemName(t *testing.T) {
+	lf := &Lockfile{
+		GemSpecs: []GemSpec{
+			{Name: "activerecord-postgis", Version: "0.5.1", SourceURL: "https://rubygems.org/"},
+		},
+		Checksums: map[string][]Checksum{
+			"activerecord-postgis-0.5.1": {
+				{Algorithm: "sha256", Digest: "f73aea3288d77ce284e41d6ea434c464f92578faabaeacb1e58741ef93469f92"},
+			},
+		},
+	}
+
+	var buf strings.Builder
+	writer := NewLockfileWriter()
+	if err := writer.Write(lf, &buf); err != nil {
+		t.Fatalf("Write failed: %v", err)
+	}
+
+	got := buf.String()
+	want := "  activerecord-postgis (0.5.1) sha256=f73aea3288d77ce284e41d6ea434c464f92578faabaeacb1e58741ef93469f92\n"
+	if !strings.Contains(got, want) {
+		t.Fatalf("expected checksum line %q, got:\n%s", want, got)
+	}
+}
+
 func TestConvenienceFunctions(t *testing.T) {
 	lf := &Lockfile{
 		GemSpecs: []GemSpec{
@@ -518,9 +543,9 @@ func TestIndentationAndFormatting(t *testing.T) {
 			t.Errorf("Line %d: dependency should have 2-space indent: %q", i+1, line)
 		}
 
-		// BUNDLED WITH version should have 3-space indent
-		if line == "   2.3.26" && !strings.HasPrefix(line, "   ") {
-			t.Errorf("Line %d: bundled version should have 3-space indent: %q", i+1, line)
+		// BUNDLED WITH version should have 2-space indent
+		if line == "  2.3.26" && !strings.HasPrefix(line, "  ") {
+			t.Errorf("Line %d: bundled version should have 2-space indent: %q", i+1, line)
 		}
 	}
 }
