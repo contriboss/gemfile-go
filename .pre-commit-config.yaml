@@ -12,7 +12,7 @@ repos:
         args: ['--fix=lf']
 
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.4.0
+    rev: v2.8.0
     hooks:
       - id: golangci-lint
 
