@@ -554,3 +554,105 @@ end
 		checkGemDependency(t, &dep, expectedGems)
 	}
 }
+
+func TestEnvFetchSupport(t *testing.T) {
+	// Test ENV.fetch with default value
+	testGemfile := `source 'https://rubygems.org'
+
+gem 'rails'
+gem 'activesupport', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
+gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
+`
+
+	t.Run("ENV.fetch with default (env not set)", func(t *testing.T) {
+		// Make sure env var is not set
+		os.Unsetenv("RAILS_VERSION")
+
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+
+		// Find activesupport gem
+		as := findGem(parsed.Dependencies, "activesupport")
+		if as == nil {
+			t.Fatal("expected activesupport gem to be parsed")
+		}
+
+		// Should use default value "~> 8.1.0"
+		if len(as.Constraints) != 1 || as.Constraints[0] != "~> 8.1.0" {
+			t.Errorf("expected constraint '~> 8.1.0', got %v", as.Constraints)
+		}
+	})
+
+	t.Run("ENV.fetch with env var set", func(t *testing.T) {
+		os.Setenv("RAILS_VERSION", "~> 7.1.0")
+		defer os.Unsetenv("RAILS_VERSION")
+
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+
+		// Find activesupport gem
+		as := findGem(parsed.Dependencies, "activesupport")
+		if as == nil {
+			t.Fatal("expected activesupport gem to be parsed")
+		}
+
+		// Should use env var value "~> 7.1.0"
+		if len(as.Constraints) != 1 || as.Constraints[0] != "~> 7.1.0" {
+			t.Errorf("expected constraint '~> 7.1.0', got %v", as.Constraints)
+		}
+	})
+}
+
+func TestEnvElementReferenceSupport(t *testing.T) {
+	// Test ENV["VAR"] syntax
+	testGemfile := `source 'https://rubygems.org'
+
+gem 'my_gem', ENV["MY_GEM_VERSION"]
+`
+
+	t.Run("ENV[] with env var set", func(t *testing.T) {
+		os.Setenv("MY_GEM_VERSION", "~> 2.0")
+		defer os.Unsetenv("MY_GEM_VERSION")
+
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+
+		gem := findGem(parsed.Dependencies, "my_gem")
+		if gem == nil {
+			t.Fatal("expected my_gem to be parsed")
+		}
+
+		if len(gem.Constraints) != 1 || gem.Constraints[0] != "~> 2.0" {
+			t.Errorf("expected constraint '~> 2.0', got %v", gem.Constraints)
+		}
+	})
+
+	t.Run("ENV[] with env var not set", func(t *testing.T) {
+		os.Unsetenv("MY_GEM_VERSION")
+
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+
+		gem := findGem(parsed.Dependencies, "my_gem")
+		if gem == nil {
+			t.Fatal("expected my_gem to be parsed")
+		}
+
+		// Should have no constraints when env var is not set
+		if len(gem.Constraints) != 0 {
+			t.Errorf("expected no constraints when env not set, got %v", gem.Constraints)
+		}
+	})
+}

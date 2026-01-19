@@ -3,6 +3,7 @@ package gemfile
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -386,6 +387,16 @@ func (p *TreeSitterGemfileParser) extractArguments(node *tree_sitter.Node) []str
 			// Expand variable to its value if it exists
 			value := p.expandVariable(varName)
 			args = append(args, value)
+		case nodeCall:
+			// Handle ENV.fetch("VAR", "default") calls
+			if value := p.evaluateEnvCall(child); value != "" {
+				args = append(args, value)
+			}
+		case nodeElementReference:
+			// Handle ENV["VAR"] calls
+			if value := p.evaluateEnvElementReference(child); value != "" {
+				args = append(args, value)
+			}
 		}
 	}
 
@@ -606,4 +617,116 @@ func (p *TreeSitterGemfileParser) expandVariable(input string) string {
 		return value
 	}
 	return input
+}
+
+// isEnvCallNode checks if a node is an ENV.fetch or ENV::fetch call
+func (p *TreeSitterGemfileParser) isEnvCallNode(node *tree_sitter.Node) (isEnv bool, method string) {
+	var isEnvCall bool
+	var methodName string
+
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		kind := child.Kind()
+
+		switch kind {
+		case nodeScopeResolution:
+			constNode := p.helper.FindChildByKind(child, nodeConstant)
+			if constNode != nil && p.helper.GetNodeText(constNode) == envConstant {
+				isEnvCall = true
+			}
+		case nodeConstant:
+			if p.helper.GetNodeText(child) == envConstant {
+				isEnvCall = true
+			}
+		case nodeIdentifier:
+			methodName = p.helper.GetNodeText(child)
+		}
+	}
+	return isEnvCall, methodName
+}
+
+// extractEnvFetchArgs extracts env var name and default value from argument list
+func (p *TreeSitterGemfileParser) extractEnvFetchArgs(argList *tree_sitter.Node) (envVar, defaultVal string) {
+	var envVarName, defaultValue string
+	argIndex := 0
+
+	for i := uint(0); i < argList.ChildCount(); i++ {
+		child := argList.Child(i)
+		if child.Kind() == nodeString {
+			switch argIndex {
+			case 0:
+				envVarName = p.helper.ExtractStringValue(child)
+			case 1:
+				defaultValue = p.helper.ExtractStringValue(child)
+			}
+			argIndex++
+		}
+	}
+	return envVarName, defaultValue
+}
+
+// evaluateEnvCall evaluates ENV.fetch("VAR", "default") or ENV.fetch("VAR") calls
+// Returns the environment variable value or the default value
+func (p *TreeSitterGemfileParser) evaluateEnvCall(node *tree_sitter.Node) string {
+	if node == nil || node.Kind() != nodeCall {
+		return ""
+	}
+
+	isEnvCall, methodName := p.isEnvCallNode(node)
+	if !isEnvCall || (methodName != "fetch" && methodName != "") {
+		return ""
+	}
+
+	argList := p.helper.FindChildByKind(node, nodeArgumentList)
+	if argList == nil {
+		return ""
+	}
+
+	envVarName, defaultValue := p.extractEnvFetchArgs(argList)
+	if envVarName == "" {
+		return ""
+	}
+
+	if value := lookupEnv(envVarName); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
+// evaluateEnvElementReference evaluates ENV["VAR"] calls
+// Returns the environment variable value or empty string
+func (p *TreeSitterGemfileParser) evaluateEnvElementReference(node *tree_sitter.Node) string {
+	if node == nil || node.Kind() != nodeElementReference {
+		return ""
+	}
+
+	// Structure: element_reference { constant "ENV" string "VAR_NAME" }
+	var isEnvRef bool
+	var envVarName string
+
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		kind := child.Kind()
+
+		switch kind {
+		case nodeConstant:
+			if p.helper.GetNodeText(child) == envConstant {
+				isEnvRef = true
+			}
+		case nodeString:
+			envVarName = p.helper.ExtractStringValue(child)
+		}
+	}
+
+	if !isEnvRef || envVarName == "" {
+		return ""
+	}
+
+	return lookupEnv(envVarName)
+}
+
+// lookupEnv looks up an environment variable
+// This is a separate function to allow for testing/mocking
+func lookupEnv(name string) string {
+	return os.Getenv(name)
 }

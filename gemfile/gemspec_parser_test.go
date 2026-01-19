@@ -8,10 +8,11 @@ import (
 
 // Test constants
 const (
-	testGemName     = "test_gem"
-	testGemHomepage = "https://github.com/example/test_gem"
-	testGemRack     = "rack"
-	testDevelopment = "development"
+	testGemName      = "test_gem"
+	testGemHomepage  = "https://github.com/example/test_gem"
+	testGemRack      = "rack"
+	testDevelopment  = "development"
+	testConstraint20 = "~> 2.0"
 )
 
 func TestGemspecParser(t *testing.T) {
@@ -65,8 +66,8 @@ func TestGemspecParser(t *testing.T) {
 		if dep.Name != testGemRack {
 			t.Errorf("Expected first runtime dep to be '%s', got %s", testGemRack, dep.Name)
 		}
-		if len(dep.Constraints) != 1 || dep.Constraints[0] != "~> 2.0" {
-			t.Errorf("Expected rack constraint '~> 2.0', got %v", dep.Constraints)
+		if len(dep.Constraints) != 1 || dep.Constraints[0] != testConstraint20 {
+			t.Errorf("Expected rack constraint '%s', got %v", testConstraint20, dep.Constraints)
 		}
 
 		// Check second runtime dependency with multiple constraints

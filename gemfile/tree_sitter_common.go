@@ -49,6 +49,7 @@ const (
 	sourceKey        = "source"
 	trueValue        = "true"
 	falseValue       = "false"
+	envConstant      = "ENV"
 )
 
 // RubyASTHelper provides common tree-sitter helper methods
