@@ -7,8 +7,9 @@ import (
 )
 
 const (
-	gemfileName = "Gemfile"
-	gemsRbName  = "gems.rb"
+	gemfileName     = "Gemfile"
+	gemfileLockName = "Gemfile.lock"
+	gemsRbName      = "gems.rb"
 )
 
 // FilePaths contains the paths to Gemfile and Gemfile.lock
@@ -20,9 +21,13 @@ type FilePaths struct {
 // FindGemfiles locates the Gemfile and corresponding lock file
 // Supports:
 // - BUNDLE_GEMFILE environment variable
+// - BUNDLE_LOCKFILE environment variable (like Bundler)
 // - Gemfile / Gemfile.lock (default)
 // - gems.rb / gems.locked
 func FindGemfiles() (*FilePaths, error) {
+	// Check BUNDLE_LOCKFILE (explicit override, like Bundler)
+	bundleLockfile := os.Getenv("BUNDLE_LOCKFILE")
+
 	// Check BUNDLE_GEMFILE environment variable first
 	if bundleGemfile := os.Getenv("BUNDLE_GEMFILE"); bundleGemfile != "" {
 		gemfile, err := filepath.Abs(bundleGemfile)
@@ -30,13 +35,23 @@ func FindGemfiles() (*FilePaths, error) {
 			return nil, fmt.Errorf("invalid BUNDLE_GEMFILE path: %w", err)
 		}
 
-		if _, err := os.Stat(gemfile); os.IsNotExist(err) {
+		if _, statErr := os.Stat(gemfile); os.IsNotExist(statErr) {
 			return nil, fmt.Errorf(
 				"❌ BUNDLE_GEMFILE points to non-existent file\n   Path: %s\n"+
 					"   💡 Check the file path or unset BUNDLE_GEMFILE", gemfile)
 		}
 
-		lockfile := determineLockfilePath(gemfile)
+		// Use BUNDLE_LOCKFILE if set, otherwise derive from gemfile
+		var lockfile string
+		if bundleLockfile != "" {
+			lockfile, err = filepath.Abs(bundleLockfile)
+			if err != nil {
+				return nil, fmt.Errorf("invalid BUNDLE_LOCKFILE path: %w", err)
+			}
+		} else {
+			lockfile = determineLockfilePath(gemfile)
+		}
+
 		return &FilePaths{
 			Gemfile:     gemfile,
 			GemfileLock: lockfile,
@@ -48,7 +63,7 @@ func FindGemfiles() (*FilePaths, error) {
 		gemfile  string
 		lockfile string
 	}{
-		{"Gemfile", "Gemfile.lock"},
+		{gemfileName, gemfileLockName},
 		{"gems.rb", "gems.locked"},
 	}
 
@@ -81,18 +96,39 @@ func FindGemfiles() (*FilePaths, error) {
 }
 
 // determineLockfilePath determines the lock file path based on the Gemfile path
+// For custom gemfiles (e.g., Appraisal), falls back to Gemfile.lock if the
+// computed lockfile doesn't exist. Checks same directory first, then parent.
 func determineLockfilePath(gemfilePath string) string {
 	dir := filepath.Dir(gemfilePath)
 	base := filepath.Base(gemfilePath)
 
 	switch base {
 	case gemfileName:
-		return filepath.Join(dir, "Gemfile.lock")
+		return filepath.Join(dir, gemfileLockName)
 	case gemsRbName:
 		return filepath.Join(dir, "gems.locked")
 	default:
-		// For custom names, append .lock
-		return gemfilePath + ".lock"
+		// For custom names (e.g., Appraisal gemfiles), try computed path first
+		computedLockfile := gemfilePath + ".lock"
+		if _, err := os.Stat(computedLockfile); err == nil {
+			return computedLockfile
+		}
+
+		// Fallback to Gemfile.lock in the same directory
+		fallbackLockfile := filepath.Join(dir, gemfileLockName)
+		if _, err := os.Stat(fallbackLockfile); err == nil {
+			return fallbackLockfile
+		}
+
+		// Fallback to Gemfile.lock in parent directory (gemfiles/*.gemfile pattern)
+		parentLockfile := filepath.Join(dir, "..", gemfileLockName)
+		if _, err := os.Stat(parentLockfile); err == nil {
+			absPath, _ := filepath.Abs(parentLockfile)
+			return absPath
+		}
+
+		// Return computed path (will error later with clear message)
+		return computedLockfile
 	}
 }
 
