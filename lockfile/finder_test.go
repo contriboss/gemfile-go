@@ -3,6 +3,7 @@ package lockfile
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -136,8 +137,9 @@ func TestFindGemfilesWithBundleLockfile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create Appraisal.root.gemfile and Gemfile.lock (no Appraisal.root.gemfile.lock)
-	// This simulates the Appraisal pattern where custom gemfiles share the main lockfile
+	// Create custom gemfile and test explicit BUNDLE_LOCKFILE override
+	// Note: Appraisals normally use discrete lockfiles (e.g., gemfiles/*.gemfile.lock)
+	// This test verifies that BUNDLE_LOCKFILE can explicitly override the default behavior
 	customGemfile := filepath.Join(tmpDir, "Appraisal.root.gemfile")
 	if err := os.WriteFile(customGemfile, []byte("gemspec"), 0600); err != nil {
 		t.Fatal(err)
@@ -172,7 +174,7 @@ func TestFindGemfilesWithBundleLockfile(t *testing.T) {
 	}
 }
 
-func TestFindGemfilesAppraisalFallback(t *testing.T) {
+func TestFindGemfilesWithInvalidBundleLockfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(oldWd) }()
@@ -180,18 +182,13 @@ func TestFindGemfilesAppraisalFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create Appraisal.root.gemfile and Gemfile.lock (no Appraisal.root.gemfile.lock)
-	// Test automatic fallback WITHOUT setting BUNDLE_LOCKFILE
-	customGemfile := filepath.Join(tmpDir, "Appraisal.root.gemfile")
-	if err := os.WriteFile(customGemfile, []byte("gemspec"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	mainLockfile := filepath.Join(tmpDir, "Gemfile.lock")
-	if err := os.WriteFile(mainLockfile, []byte("GEM\n  specs:\n"), 0600); err != nil {
+	// Create a valid gemfile
+	customGemfile := filepath.Join(tmpDir, "Gemfile")
+	if err := os.WriteFile(customGemfile, []byte("gem 'rails'"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
-	// Set only BUNDLE_GEMFILE - should auto-fallback to Gemfile.lock
+	// Set BUNDLE_LOCKFILE to a non-existent file
 	oldGemfile := os.Getenv("BUNDLE_GEMFILE")
 	oldLockfile := os.Getenv("BUNDLE_LOCKFILE")
 	defer func() {
@@ -200,24 +197,20 @@ func TestFindGemfilesAppraisalFallback(t *testing.T) {
 	}()
 
 	os.Setenv("BUNDLE_GEMFILE", customGemfile)
-	os.Setenv("BUNDLE_LOCKFILE", "") // Explicitly unset
+	os.Setenv("BUNDLE_LOCKFILE", "/nonexistent/path/to/lockfile.lock")
 
-	paths, err := FindGemfiles()
-	if err != nil {
-		t.Fatalf("Expected to find files with fallback, got error: %v", err)
+	_, err := FindGemfiles()
+	if err == nil {
+		t.Fatal("Expected error when BUNDLE_LOCKFILE points to non-existent file, got nil")
 	}
 
-	if filepath.Base(paths.Gemfile) != appraisalRootGemfile {
-		t.Errorf("Expected %s, got %s", appraisalRootGemfile, paths.Gemfile)
-	}
-
-	// Should auto-fallback to Gemfile.lock since Appraisal.root.gemfile.lock doesn't exist
-	if filepath.Base(paths.GemfileLock) != gemfileLockName {
-		t.Errorf("Expected Gemfile.lock (fallback), got %s", paths.GemfileLock)
+	expectedMsg := "BUNDLE_LOCKFILE points to non-existent file"
+	if !strings.Contains(err.Error(), expectedMsg) {
+		t.Errorf("Expected error to contain %q, got: %v", expectedMsg, err)
 	}
 }
 
-func TestFindGemfilesSubdirectoryFallback(t *testing.T) {
+func TestFindGemfilesAppraisalDiscreteLockfile(t *testing.T) {
 	tmpDir := t.TempDir()
 	oldWd, _ := os.Getwd()
 	defer func() { _ = os.Chdir(oldWd) }()
@@ -225,23 +218,16 @@ func TestFindGemfilesSubdirectoryFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create gemfiles/style.gemfile and Gemfile.lock in parent (project root)
-	// This is the typical Appraisal directory structure
-	gemfilesDir := filepath.Join(tmpDir, "gemfiles")
-	if err := os.MkdirAll(gemfilesDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	customGemfile := filepath.Join(gemfilesDir, "style.gemfile")
+	// Create Appraisal.root.gemfile and its discrete lockfile
+	customGemfile := filepath.Join(tmpDir, "Appraisal.root.gemfile")
 	if err := os.WriteFile(customGemfile, []byte("gemspec"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	// Lockfile in project root (parent of gemfiles/)
-	mainLockfile := filepath.Join(tmpDir, "Gemfile.lock")
-	if err := os.WriteFile(mainLockfile, []byte("GEM\n  specs:\n"), 0600); err != nil {
+	discreteLockfile := filepath.Join(tmpDir, "Appraisal.root.gemfile.lock")
+	if err := os.WriteFile(discreteLockfile, []byte("GEM\n  specs:\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 
-	// Set only BUNDLE_GEMFILE - should auto-fallback to parent's Gemfile.lock
 	oldGemfile := os.Getenv("BUNDLE_GEMFILE")
 	oldLockfile := os.Getenv("BUNDLE_LOCKFILE")
 	defer func() {
@@ -254,20 +240,16 @@ func TestFindGemfilesSubdirectoryFallback(t *testing.T) {
 
 	paths, err := FindGemfiles()
 	if err != nil {
-		t.Fatalf("Expected to find files with parent fallback, got error: %v", err)
+		t.Fatalf("Expected to find files with discrete lockfile, got error: %v", err)
 	}
 
-	if filepath.Base(paths.Gemfile) != "style.gemfile" {
-		t.Errorf("Expected style.gemfile, got %s", paths.Gemfile)
+	if filepath.Base(paths.Gemfile) != appraisalRootGemfile {
+		t.Errorf("Expected %s, got %s", appraisalRootGemfile, paths.Gemfile)
 	}
 
-	// Should auto-fallback to parent's Gemfile.lock
-	if filepath.Base(paths.GemfileLock) != gemfileLockName {
-		t.Errorf("Expected Gemfile.lock (parent fallback), got %s", paths.GemfileLock)
-	}
-
-	// Verify it's the parent's lockfile, not gemfiles/Gemfile.lock
-	if filepath.Dir(paths.GemfileLock) == gemfilesDir {
-		t.Errorf("Expected parent Gemfile.lock, got one in gemfiles/")
+	// Should use discrete lockfile (Appraisal.root.gemfile.lock)
+	expectedLockfile := "Appraisal.root.gemfile.lock"
+	if filepath.Base(paths.GemfileLock) != expectedLockfile {
+		t.Errorf("Expected %s (discrete lockfile), got %s", expectedLockfile, paths.GemfileLock)
 	}
 }
