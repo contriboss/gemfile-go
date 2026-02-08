@@ -368,6 +368,11 @@ gem 'redis', :source => 'https://gems.example.com'
 			continue
 		}
 
+		// Verify constraints are empty for these gems (as they are options)
+		if len(found.Constraints) > 0 {
+			t.Errorf("Gem %s: expected 0 constraints, got %v", name, found.Constraints)
+		}
+
 		if expected.require != "" {
 			if found.Require == nil || *found.Require != expected.require {
 				val := "nil"

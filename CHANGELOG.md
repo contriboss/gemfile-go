@@ -6,6 +6,7 @@
 
 * support hash rocket syntax for gem and gemspec options
 * improve group parsing to handle comments and trailing tokens correctly
+* improve version constraint extraction to correctly handle hash rocket and symbolized hash options
 
 ## [0.8.0](https://github.com/contriboss/gemfile-go/compare/v0.7.3...v0.8.0) (2026-01-22)
 

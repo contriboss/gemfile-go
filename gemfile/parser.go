@@ -484,35 +484,16 @@ func (p *GemfileParser) extractVersionConstraints(line string) []string {
 	nameRe := regexp.MustCompile(`gem\s+['"][^'"]+['"],?\s*`)
 	remaining := nameRe.ReplaceAllString(line, "")
 
-	// Pattern to match version strings (not including options like require:, github:, etc.)
-	// Stop at first option keyword
-	optionKeys := []string{
-		"require:",
-		"github:",
-		"git:",
-		"path:",
-		"groups:",
-		"group:",
-		"platforms:",
-		"platform:",
-		"source:",
-	}
-
-	optionsStart := -1
-	for _, key := range optionKeys {
-		if idx := strings.Index(remaining, key); idx != -1 && (optionsStart == -1 || idx < optionsStart) {
-			optionsStart = idx
-		}
-	}
-
-	versionPart := remaining
-	if optionsStart != -1 {
-		versionPart = remaining[:optionsStart]
+	// Stop at first option keyword or hash rocket
+	// Supports both symbolized hashes and hash rockets
+	optionRe := regexp.MustCompile(`(?::\w+\s*=>|[\w:]+:)`)
+	if loc := optionRe.FindStringIndex(remaining); loc != nil {
+		remaining = remaining[:loc[0]]
 	}
 
 	// Extract all quoted strings from the version part
 	re := regexp.MustCompile(`['"]([^'"]+)['"]`)
-	matches := re.FindAllStringSubmatch(versionPart, -1)
+	matches := re.FindAllStringSubmatch(remaining, -1)
 
 	constraints := make([]string, 0, len(matches))
 	for _, match := range matches {
