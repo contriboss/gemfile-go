@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -270,6 +271,143 @@ gem 'outside_block'
 }
 
 // Helper functions
+func TestHashRocketSyntax(t *testing.T) {
+	testGemfile := `# Gemfile with hash rocket syntax
+source 'https://gem.coop'
+
+gemspec :path => './', :name => 'my-gem', :development_group => :dev, :glob => '*.gemspec'
+
+gem 'rails', :require => 'rails/all'
+gem 'rspec', :groups => [:development, :test]
+gem 'nokogiri', :platforms => [:mri, :jruby]
+gem 'pg', :git => 'https://github.com/postgres/postgres.git', :branch => 'master'
+gem 'mysql2', :github => 'brianmario/mysql2', :branch => 'master'
+gem 'sqlite3', :path => 'vendor/sqlite3'
+gem 'redis', :source => 'https://gems.example.com'
+`
+	tmpDir := t.TempDir()
+	gemfilePath := filepath.Join(tmpDir, "Gemfile_hashrocket")
+	err := os.WriteFile(gemfilePath, []byte(testGemfile), 0600)
+	if err != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", err)
+	}
+
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	// Test gemspec with hash rocket
+	if len(parsed.Gemspecs) == 0 {
+		t.Fatal("Expected gemspec to be parsed")
+	}
+	gs := parsed.Gemspecs[0]
+	if gs.Path != "./" {
+		t.Errorf("Expected gemspec path './', got %s", gs.Path)
+	}
+	if gs.Name != "my-gem" {
+		t.Errorf("Expected gemspec name 'my-gem', got %s", gs.Name)
+	}
+	if gs.DevelopmentGroup != "dev" {
+		t.Errorf("Expected gemspec development_group 'dev', got %s", gs.DevelopmentGroup)
+	}
+	if gs.Glob != "*.gemspec" {
+		t.Errorf("Expected gemspec glob '*.gemspec', got %s", gs.Glob)
+	}
+
+	// Test gems with hash rocket
+	expectedGems := map[string]struct {
+		require    string
+		groups     []string
+		platforms  []string
+		sourceType string
+		sourceURL  string
+		branch     string
+	}{
+		"rails": {
+			require: "rails/all",
+		},
+		"rspec": {
+			groups: []string{"development", "test"},
+		},
+		"nokogiri": {
+			platforms: []string{"mri", "jruby"},
+		},
+		"pg": {
+			sourceType: "git",
+			sourceURL:  "https://github.com/postgres/postgres.git",
+			branch:     "master",
+		},
+		"mysql2": {
+			sourceType: "git",
+			sourceURL:  "https://github.com/brianmario/mysql2.git",
+			branch:     "master",
+		},
+		"sqlite3": {
+			sourceType: "path",
+			sourceURL:  "vendor/sqlite3",
+		},
+		"redis": {
+			sourceType: "rubygems",
+			sourceURL:  "https://gems.example.com",
+		},
+	}
+
+	for name, expected := range expectedGems {
+		var found *GemDependency
+		for _, g := range parsed.Dependencies {
+			if g.Name == name {
+				found = &g
+				break
+			}
+		}
+
+		if found == nil {
+			t.Errorf("Gem %s not found", name)
+			continue
+		}
+
+		if expected.require != "" {
+			if found.Require == nil || *found.Require != expected.require {
+				val := "nil"
+				if found.Require != nil {
+					val = *found.Require
+				}
+				t.Errorf("Gem %s: expected require %s, got %s", name, expected.require, val)
+			}
+		}
+
+		if len(expected.groups) > 0 {
+			if !reflect.DeepEqual(found.Groups, expected.groups) {
+				t.Errorf("Gem %s: expected groups %v, got %v", name, expected.groups, found.Groups)
+			}
+		}
+
+		if len(expected.platforms) > 0 {
+			if !reflect.DeepEqual(found.Platforms, expected.platforms) {
+				t.Errorf("Gem %s: expected platforms %v, got %v", name, expected.platforms, found.Platforms)
+			}
+		}
+
+		if expected.sourceType != "" {
+			if found.Source == nil {
+				t.Errorf("Gem %s: expected source, got nil", name)
+			} else {
+				if found.Source.Type != expected.sourceType {
+					t.Errorf("Gem %s: expected source type %s, got %s", name, expected.sourceType, found.Source.Type)
+				}
+				if found.Source.URL != expected.sourceURL {
+					t.Errorf("Gem %s: expected source URL %s, got %s", name, expected.sourceURL, found.Source.URL)
+				}
+				if expected.branch != "" && found.Source.Branch != expected.branch {
+					t.Errorf("Gem %s: expected branch %s, got %s", name, expected.branch, found.Source.Branch)
+				}
+			}
+		}
+	}
+}
+
 func stringPtr(s string) *string {
 	return &s
 }

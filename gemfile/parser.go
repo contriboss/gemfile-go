@@ -389,8 +389,13 @@ func (p *GemfileParser) parseSource(line string) (Source, bool, error) {
 // parseGroups parses group declarations
 // Examples: group :development, :test do
 func (p *GemfileParser) parseGroups(line string) []string {
+	// Remove the 'group' keyword and 'do' keyword
+	line = strings.TrimPrefix(strings.TrimSpace(line), "group ")
+	line = strings.TrimSuffix(line, " do")
+
 	// Extract group names using regex
-	re := regexp.MustCompile(`:(\w+)`)
+	// Supports symbols like :test or strings like "test"
+	re := regexp.MustCompile(`[:"']?(\w+)["']?`)
 	matches := re.FindAllStringSubmatch(line, -1)
 
 	groups := make([]string, 0, len(matches))
@@ -503,8 +508,8 @@ func (p *GemfileParser) extractVersionConstraints(line string) []string {
 
 // extractSource extracts git/path source information
 func (p *GemfileParser) extractSource(line string) *Source {
-	// Check for github source: github: 'user/repo'
-	if githubRe := regexp.MustCompile(`github:\s*['"]([^'"]+)['"]`); githubRe.MatchString(line) {
+	// Check for github source: github: 'user/repo' or :github => 'user/repo'
+	if githubRe := regexp.MustCompile(`(?::github\s*=>|github:)\s*['"]([^'"]+)['"]`); githubRe.MatchString(line) {
 		matches := githubRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			source := &Source{
@@ -513,7 +518,7 @@ func (p *GemfileParser) extractSource(line string) *Source {
 			}
 
 			// Extract branch/tag/ref
-			if branchRe := regexp.MustCompile(`branch:\s*['"]([^'"]+)['"]`); branchRe.MatchString(line) {
+			if branchRe := regexp.MustCompile(`(?::branch\s*=>|branch:)\s*['"]([^'"]+)['"]`); branchRe.MatchString(line) {
 				branchMatches := branchRe.FindStringSubmatch(line)
 				if len(branchMatches) > 1 {
 					source.Branch = branchMatches[1]
@@ -524,19 +529,29 @@ func (p *GemfileParser) extractSource(line string) *Source {
 		}
 	}
 
-	// Check for git source: git: 'https://...'
-	if gitRe := regexp.MustCompile(`git:\s*['"]([^'"]+)['"]`); gitRe.MatchString(line) {
+	// Check for git source: git: 'https://...' or :git => 'https://...'
+	if gitRe := regexp.MustCompile(`(?::git\s*=>|git:)\s*['"]([^'"]+)['"]`); gitRe.MatchString(line) {
 		matches := gitRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
-			return &Source{
+			source := &Source{
 				Type: "git",
 				URL:  matches[1],
 			}
+
+			// Extract branch/tag/ref for generic git source too
+			if branchRe := regexp.MustCompile(`(?::branch\s*=>|branch:)\s*['"]([^'"]+)['"]`); branchRe.MatchString(line) {
+				branchMatches := branchRe.FindStringSubmatch(line)
+				if len(branchMatches) > 1 {
+					source.Branch = branchMatches[1]
+				}
+			}
+
+			return source
 		}
 	}
 
-	// Check for path source: path: 'local/path'
-	if pathRe := regexp.MustCompile(`path:\s*['"]([^'"]+)['"]`); pathRe.MatchString(line) {
+	// Check for path source: path: 'local/path' or :path => 'local/path'
+	if pathRe := regexp.MustCompile(`(?::path\s*=>|path:)\s*['"]([^'"]+)['"]`); pathRe.MatchString(line) {
 		matches := pathRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			return &Source{
@@ -546,8 +561,8 @@ func (p *GemfileParser) extractSource(line string) *Source {
 		}
 	}
 
-	// Check for inline rubygems source: source: 'https://...'
-	if sourceRe := regexp.MustCompile(`source:\s*['"]([^'"]+)['"]`); sourceRe.MatchString(line) {
+	// Check for inline rubygems source: source: 'https://...' or :source => 'https://...'
+	if sourceRe := regexp.MustCompile(`(?::source\s*=>|source:)\s*['"]([^'"]+)['"]`); sourceRe.MatchString(line) {
 		matches := sourceRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			return &Source{
@@ -562,8 +577,8 @@ func (p *GemfileParser) extractSource(line string) *Source {
 
 // extractRequire extracts require option
 func (p *GemfileParser) extractRequire(line string) *string {
-	// require: false
-	if requireRe := regexp.MustCompile(`require:\s*(false|['"][^'"]*['"])`); requireRe.MatchString(line) {
+	// require: false or :require => false or require: 'foo' or :require => 'foo'
+	if requireRe := regexp.MustCompile(`(?::require\s*=>|require:)\s*(false|['"][^'"]*['"])`); requireRe.MatchString(line) {
 		matches := requireRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			require := matches[1]
@@ -582,12 +597,12 @@ func (p *GemfileParser) extractRequire(line string) *string {
 
 // extractGroupOverrides extracts group overrides from gem line
 func (p *GemfileParser) extractGroupOverrides(line string) []string {
-	// groups: [:development, :test]
-	if groupsRe := regexp.MustCompile(`groups?:\s*\[([^\]]+)\]`); groupsRe.MatchString(line) {
+	// groups: [:development, :test] or :groups => [:development, :test]
+	if groupsRe := regexp.MustCompile(`(?::groups?\s*=>|groups?:\s*)\s*\[([^\]]+)\]`); groupsRe.MatchString(line) {
 		matches := groupsRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			groupStr := matches[1]
-			groupRe := regexp.MustCompile(`:(\w+)`)
+			groupRe := regexp.MustCompile(`[:"']?(\w+)["']?`)
 			groupMatches := groupRe.FindAllStringSubmatch(groupStr, -1)
 
 			groups := make([]string, 0, len(groupMatches))
@@ -605,12 +620,12 @@ func (p *GemfileParser) extractGroupOverrides(line string) []string {
 
 // extractPlatforms extracts platform restrictions from gem line
 func (p *GemfileParser) extractPlatforms(line string) []string {
-	// platforms: [:windows_31, :jruby]
-	if platformsRe := regexp.MustCompile(`platforms?:\s*\[([^\]]+)\]`); platformsRe.MatchString(line) {
+	// platforms: [:windows_31, :jruby] or :platforms => [:windows_31, :jruby]
+	if platformsRe := regexp.MustCompile(`(?::platforms?\s*=>|platforms?:\s*)\s*\[([^\]]+)\]`); platformsRe.MatchString(line) {
 		matches := platformsRe.FindStringSubmatch(line)
 		if len(matches) > 1 {
 			platformStr := matches[1]
-			platformRe := regexp.MustCompile(`:(\w+)`)
+			platformRe := regexp.MustCompile(`[:"']?(\w+)["']?`)
 			platformMatches := platformRe.FindAllStringSubmatch(platformStr, -1)
 
 			platforms := make([]string, 0, len(platformMatches))
@@ -620,14 +635,6 @@ func (p *GemfileParser) extractPlatforms(line string) []string {
 				}
 			}
 			return platforms
-		}
-	}
-
-	// platforms: :jruby (single platform)
-	if platformRe := regexp.MustCompile(`platforms?:\s*:(\w+)`); platformRe.MatchString(line) {
-		matches := platformRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			return []string{matches[1]}
 		}
 	}
 
@@ -645,13 +652,6 @@ func (p *GemfileParser) parseRubyVersion(line string) string {
 }
 
 // parseGemspecDirective parses gemspec directive
-// Examples:
-//
-//	gemspec
-//	gemspec path: "components/payment"
-//	gemspec name: "payment_core"
-//	gemspec development_group: :ci
-//	gemspec path: ".", name: "my_gem", development_group: :test
 func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 	gemspecRef := &GemspecReference{
 		Path:             ".",
@@ -664,39 +664,29 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 		return gemspecRef
 	}
 
-	// Parse path option
-	if pathRe := regexp.MustCompile(`path:\s*['"]([^'"]+)['"]`); pathRe.MatchString(line) {
-		matches := pathRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			gemspecRef.Path = matches[1]
-		}
-	}
-
-	// Parse name option
-	if nameRe := regexp.MustCompile(`name:\s*['"]([^'"]+)['"]`); nameRe.MatchString(line) {
-		matches := nameRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			gemspecRef.Name = matches[1]
-		}
-	}
-
-	// Parse development_group option
-	if devGroupRe := regexp.MustCompile(`development_group:\s*:(\w+)`); devGroupRe.MatchString(line) {
-		matches := devGroupRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			gemspecRef.DevelopmentGroup = matches[1]
-		}
-	}
-
-	// Parse glob option
-	if globRe := regexp.MustCompile(`glob:\s*['"]([^'"]+)['"]`); globRe.MatchString(line) {
-		matches := globRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			gemspecRef.Glob = matches[1]
-		}
-	}
+	// Parse various options
+	p.parseGemspecOption(line, "path", &gemspecRef.Path)
+	p.parseGemspecOption(line, "name", &gemspecRef.Name)
+	p.parseGemspecOption(line, "development_group", &gemspecRef.DevelopmentGroup)
+	p.parseGemspecOption(line, "glob", &gemspecRef.Glob)
 
 	return gemspecRef
+}
+
+// parseGemspecOption parses a single option from a gemspec directive
+func (p *GemfileParser) parseGemspecOption(line, optionName string, target *string) {
+	// Pattern for both symbol and keyword syntax:
+	// :option => "value", :option => :value, option: "value", option: :value
+	pattern := fmt.Sprintf(`(?::%s\s*=>|%s:)\s*(?:['"]([^'"]+)['"]|:?(\w+))`, optionName, optionName)
+	re := regexp.MustCompile(pattern)
+	matches := re.FindStringSubmatch(line)
+	if len(matches) > 1 {
+		if matches[1] != "" {
+			*target = matches[1]
+		} else if len(matches) > 2 && matches[2] != "" {
+			*target = matches[2]
+		}
+	}
 }
 
 // parseVariable parses variable assignments like: rails_version = '~> 8.0.1'
