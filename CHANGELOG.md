@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased]
+
+
+### Features
+
+* support single group and platform values (e.g., `group: :test` or `platform: :mri`)
+
+
 ## [0.9.0](https://github.com/contriboss/gemfile-go/compare/v0.8.0...v0.9.0) (2026-02-08)
 
 
@@ -7,8 +15,6 @@
 
 * ✨ support hash 🚀 syntax in gemfiles and gemspecs ([a120bcc](https://github.com/contriboss/gemfile-go/commit/a120bcc01003c8e087c053dca2a5dfd50888f262))
 * ✨ support hash 🚀 syntax in gemfiles and gemspecs ([d8f48ee](https://github.com/contriboss/gemfile-go/commit/d8f48eef4ae5bfd3da4113346856133b61a0f1e9))
-
-## [Unreleased]
 
 ### Bug Fixes
 
