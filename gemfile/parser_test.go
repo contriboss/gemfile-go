@@ -421,6 +421,55 @@ func findGem(deps []GemDependency, name string) *GemDependency {
 	return nil
 }
 
+func TestParseGroupsImproved(t *testing.T) {
+	tests := []struct {
+		name     string
+		line     string
+		expected []string
+	}{
+		{
+			name:     "standard group",
+			line:     "group :development, :test do",
+			expected: []string{"development", "test"},
+		},
+		{
+			name:     "group with comment",
+			line:     "group :development do # comment",
+			expected: []string{"development"},
+		},
+		{
+			name:     "group with trailing spaces",
+			line:     "group :development do  ",
+			expected: []string{"development"},
+		},
+		{
+			name:     "group with no do",
+			line:     "group :development, :test",
+			expected: []string{"development", "test"},
+		},
+		{
+			name:     "group with string names",
+			line:     "group 'development', \"test\" do",
+			expected: []string{"development", "test"},
+		},
+		{
+			name:     "complex line with comment",
+			line:     "group :development, :test do # some note",
+			expected: []string{"development", "test"},
+		},
+	}
+
+	parser := &GemfileParser{}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parser.parseGroups(tt.line)
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("parseGroups(%q) = %v, want %v", tt.line, got, tt.expected)
+			}
+		})
+	}
+}
+
 func checkGemDependency(t *testing.T, dep *GemDependency, expectedGems map[string]struct {
 	constraints []string
 	groups      []string

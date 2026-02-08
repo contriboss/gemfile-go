@@ -389,19 +389,37 @@ func (p *GemfileParser) parseSource(line string) (Source, bool, error) {
 // parseGroups parses group declarations
 // Examples: group :development, :test do
 func (p *GemfileParser) parseGroups(line string) []string {
-	// Remove the 'group' keyword and 'do' keyword
-	line = strings.TrimPrefix(strings.TrimSpace(line), "group ")
-	line = strings.TrimSuffix(line, " do")
+	// Strip inline comments first
+	if idx := strings.Index(line, "#"); idx != -1 {
+		line = line[:idx]
+	}
 
-	// Extract group names using regex
+	// Remove the 'group' keyword
+	line = strings.TrimSpace(line)
+	line = strings.TrimPrefix(line, "group ")
+
+	// Trim everything after the 'do' token (not just suffix)
+	if idx := strings.Index(line, " do"); idx != -1 {
+		line = line[:idx]
+	} else if idx := strings.Index(line, "do"); idx != -1 {
+		// Handle cases like 'group(:dev)do' - although rare in Gemfiles
+		// Check if 'do' is a separate word or at least not part of a symbol/string
+		// For simplicity, we can check if it's preceded by space or closing paren/quote
+		line = line[:idx]
+	}
+
+	// Extract group names using a more precise regex
 	// Supports symbols like :test or strings like "test"
-	re := regexp.MustCompile(`[:"']?(\w+)["']?`)
+	// match :(\w+) and ['"](\w+)['"]
+	re := regexp.MustCompile(`:(\w+)|['"](\w+)['"]`)
 	matches := re.FindAllStringSubmatch(line, -1)
 
 	groups := make([]string, 0, len(matches))
 	for _, match := range matches {
-		if len(match) > 1 {
+		if len(match) > 1 && match[1] != "" {
 			groups = append(groups, match[1])
+		} else if len(match) > 2 && match[2] != "" {
+			groups = append(groups, match[2])
 		}
 	}
 
@@ -598,46 +616,37 @@ func (p *GemfileParser) extractRequire(line string) *string {
 // extractGroupOverrides extracts group overrides from gem line
 func (p *GemfileParser) extractGroupOverrides(line string) []string {
 	// groups: [:development, :test] or :groups => [:development, :test]
-	if groupsRe := regexp.MustCompile(`(?::groups?\s*=>|groups?:\s*)\s*\[([^\]]+)\]`); groupsRe.MatchString(line) {
-		matches := groupsRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			groupStr := matches[1]
-			groupRe := regexp.MustCompile(`[:"']?(\w+)["']?`)
-			groupMatches := groupRe.FindAllStringSubmatch(groupStr, -1)
-
-			groups := make([]string, 0, len(groupMatches))
-			for _, match := range groupMatches {
-				if len(match) > 1 {
-					groups = append(groups, match[1])
-				}
-			}
-			return groups
-		}
-	}
-
-	return nil
+	pattern := `(?::groups?\s*=>|groups?:\s*)\s*\[([^\]]+)\]`
+	return p.extractArrayFromOption(line, pattern)
 }
 
 // extractPlatforms extracts platform restrictions from gem line
 func (p *GemfileParser) extractPlatforms(line string) []string {
 	// platforms: [:windows_31, :jruby] or :platforms => [:windows_31, :jruby]
-	if platformsRe := regexp.MustCompile(`(?::platforms?\s*=>|platforms?:\s*)\s*\[([^\]]+)\]`); platformsRe.MatchString(line) {
-		matches := platformsRe.FindStringSubmatch(line)
-		if len(matches) > 1 {
-			platformStr := matches[1]
-			platformRe := regexp.MustCompile(`[:"']?(\w+)["']?`)
-			platformMatches := platformRe.FindAllStringSubmatch(platformStr, -1)
+	pattern := `(?::platforms?\s*=>|platforms?:\s*)\s*\[([^\]]+)\]`
+	return p.extractArrayFromOption(line, pattern)
+}
 
-			platforms := make([]string, 0, len(platformMatches))
-			for _, match := range platformMatches {
-				if len(match) > 1 {
-					platforms = append(platforms, match[1])
-				}
+// extractArrayFromOption extracts an array of symbols/strings from a line using the given pattern
+func (p *GemfileParser) extractArrayFromOption(line, optionPattern string) []string {
+	re := regexp.MustCompile(optionPattern)
+	matches := re.FindStringSubmatch(line)
+	if len(matches) > 1 {
+		content := matches[1]
+		// Match :symbol or "string" or 'string'
+		itemRe := regexp.MustCompile(`:(\w+)|['"](\w+)['"]`)
+		itemMatches := itemRe.FindAllStringSubmatch(content, -1)
+
+		items := make([]string, 0, len(itemMatches))
+		for _, match := range itemMatches {
+			if len(match) > 1 && match[1] != "" {
+				items = append(items, match[1])
+			} else if len(match) > 2 && match[2] != "" {
+				items = append(items, match[2])
 			}
-			return platforms
 		}
+		return items
 	}
-
 	return nil
 }
 
