@@ -95,11 +95,11 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 	// Try tree-sitter first (handles complex Ruby constructs like nested blocks)
 	// Note: Currently experimental - falls back to regex for edge cases
 	tsParser := NewTreeSitterGemfileParser([]byte(p.content))
-	gemfile, err := tsParser.ParseWithTreeSitter()
+	gemfile, tsErr := tsParser.ParseWithTreeSitter()
 
 	// Use tree-sitter result if it found content AND no gemspec directives
 	// (gemspec integration needs more work)
-	useTreeSitter := err == nil &&
+	useTreeSitter := tsErr == nil &&
 		(len(gemfile.Dependencies) > 0 || gemfile.RubyVersion != "") &&
 		len(gemfile.Gemspecs) == 0
 

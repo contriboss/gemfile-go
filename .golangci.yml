@@ -62,7 +62,6 @@ linters:
       require-specific: false
       allow-unused: false
   exclusions:
-    generated: lax
     presets:
       - comments
       - common-false-positives
@@ -93,7 +92,6 @@ formatters:
       local-prefixes:
         - github.com/contriboss/gemfile-go
   exclusions:
-    generated: lax
     paths:
       - vendor
       - testdata
