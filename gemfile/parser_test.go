@@ -413,6 +413,67 @@ gem 'redis', :source => 'https://gems.example.com'
 	}
 }
 
+func TestSingleGroupAndPlatform(t *testing.T) {
+	testGemfile := `# Gemfile with single group and platform values
+source 'https://rubygems.org'
+
+gem 'rack', :group => :test
+gem 'thor', groups: :development
+gem 'json', :platform => :mri
+gem 'rake', platforms: 'ruby'
+`
+	tmpDir := t.TempDir()
+	gemfilePath := filepath.Join(tmpDir, "Gemfile_single_values")
+	err := os.WriteFile(gemfilePath, []byte(testGemfile), 0600)
+	if err != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", err)
+	}
+
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	expectedGems := map[string]struct {
+		groups    []string
+		platforms []string
+	}{
+		"rack": {
+			groups: []string{"test"},
+		},
+		"thor": {
+			groups: []string{"development"},
+		},
+		"json": {
+			platforms: []string{"mri"},
+		},
+		"rake": {
+			platforms: []string{"ruby"},
+		},
+	}
+
+	for name, expected := range expectedGems {
+		found := findGem(parsed.Dependencies, name)
+		if found == nil {
+			t.Errorf("Gem %s not found", name)
+			continue
+		}
+
+		if len(expected.groups) > 0 {
+			if !reflect.DeepEqual(found.Groups, expected.groups) {
+				t.Errorf("Gem %s: expected groups %v, got %v", name, expected.groups, found.Groups)
+			}
+		}
+
+		if len(expected.platforms) > 0 {
+			if !reflect.DeepEqual(found.Platforms, expected.platforms) {
+				t.Errorf("Gem %s: expected platforms %v, got %v", name, expected.platforms, found.Platforms)
+			}
+		}
+	}
+}
+
 func stringPtr(s string) *string {
 	return &s
 }

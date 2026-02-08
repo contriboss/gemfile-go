@@ -597,14 +597,16 @@ func (p *GemfileParser) extractRequire(line string) *string {
 // extractGroupOverrides extracts group overrides from gem line
 func (p *GemfileParser) extractGroupOverrides(line string) []string {
 	// groups: [:development, :test] or :groups => [:development, :test]
-	pattern := `(?::groups?\s*=>|groups?:\s*)\s*\[([^\]]+)\]`
+	// group: :development or :group => :development
+	pattern := `(?::groups?\s*=>|groups?:\s*)\s*(?:\[([^\]]+)\]|:(\w+)|['"]([^'"]+)['"])`
 	return p.extractArrayFromOption(line, pattern)
 }
 
 // extractPlatforms extracts platform restrictions from gem line
 func (p *GemfileParser) extractPlatforms(line string) []string {
 	// platforms: [:windows_31, :jruby] or :platforms => [:windows_31, :jruby]
-	pattern := `(?::platforms?\s*=>|platforms?:\s*)\s*\[([^\]]+)\]`
+	// platform: :jruby or :platform => :jruby
+	pattern := `(?::platforms?\s*=>|platforms?:\s*)\s*(?:\[([^\]]+)\]|:(\w+)|['"]([^'"]+)['"])`
 	return p.extractArrayFromOption(line, pattern)
 }
 
@@ -613,20 +615,27 @@ func (p *GemfileParser) extractArrayFromOption(line, optionPattern string) []str
 	re := regexp.MustCompile(optionPattern)
 	matches := re.FindStringSubmatch(line)
 	if len(matches) > 1 {
-		content := matches[1]
-		// Match :symbol or "string" or 'string'
-		itemRe := regexp.MustCompile(`:(\w+)|['"](\w+)['"]`)
-		itemMatches := itemRe.FindAllStringSubmatch(content, -1)
+		// matches[1] is array content, matches[2] is single symbol, matches[3] is single string
+		if matches[1] != "" {
+			content := matches[1]
+			// Match :symbol or "string" or 'string'
+			itemRe := regexp.MustCompile(`:(\w+)|['"](\w+)['"]`)
+			itemMatches := itemRe.FindAllStringSubmatch(content, -1)
 
-		items := make([]string, 0, len(itemMatches))
-		for _, match := range itemMatches {
-			if len(match) > 1 && match[1] != "" {
-				items = append(items, match[1])
-			} else if len(match) > 2 && match[2] != "" {
-				items = append(items, match[2])
+			items := make([]string, 0, len(itemMatches))
+			for _, match := range itemMatches {
+				if len(match) > 1 && match[1] != "" {
+					items = append(items, match[1])
+				} else if len(match) > 2 && match[2] != "" {
+					items = append(items, match[2])
+				}
 			}
+			return items
+		} else if matches[2] != "" {
+			return []string{matches[2]}
+		} else if len(matches) > 3 && matches[3] != "" {
+			return []string{matches[3]}
 		}
-		return items
 	}
 	return nil
 }
