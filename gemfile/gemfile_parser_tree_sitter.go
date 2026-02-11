@@ -4,6 +4,7 @@ package gemfile
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -12,6 +13,7 @@ import (
 // TreeSitterGemfileParser handles parsing of Gemfile using tree-sitter
 type TreeSitterGemfileParser struct {
 	content      []byte
+	filepath     string // Path to the Gemfile being parsed
 	helper       *RubyASTHelper
 	contextStack *parserContextStack
 	variables    map[string]string // Track variable assignments
@@ -69,9 +71,10 @@ func (s *parserContextStack) pop() {
 }
 
 // NewTreeSitterGemfileParser creates a new tree-sitter based Gemfile parser
-func NewTreeSitterGemfileParser(content []byte) *TreeSitterGemfileParser {
+func NewTreeSitterGemfileParser(content []byte, filepath string) *TreeSitterGemfileParser {
 	return &TreeSitterGemfileParser{
 		content:      content,
+		filepath:     filepath,
 		helper:       NewRubyASTHelper(content),
 		contextStack: newParserContextStack(),
 		variables:    make(map[string]string),
@@ -538,6 +541,11 @@ func (p *TreeSitterGemfileParser) applyGemOption(key, value string, dep *GemDepe
 		// Always create a new source for explicit path options
 		dep.Source = &Source{Type: pathSource}
 		dep.Source.URL = value
+		// Normalize relative paths to be relative to the Gemfile directory
+		if p.filepath != "" && !filepath.IsAbs(value) {
+			dir := filepath.Dir(p.filepath)
+			dep.Source.URL = filepath.Clean(filepath.Join(dir, value))
+		}
 	case sourceKey:
 		// Always create a new rubygems source for explicit source options
 		if value != "" {

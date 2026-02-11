@@ -202,7 +202,7 @@ func TestInlineSourceOption(t *testing.T) {
 	})
 
 	t.Run("tree-sitter parser", func(t *testing.T) {
-		parser := NewTreeSitterGemfileParser([]byte(gemfileContent))
+		parser := NewTreeSitterGemfileParser([]byte(gemfileContent), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -261,7 +261,7 @@ gem 'outside_block'
 	})
 
 	t.Run("tree-sitter parser", func(t *testing.T) {
-		parser := NewTreeSitterGemfileParser([]byte(gemfileContent))
+		parser := NewTreeSitterGemfileParser([]byte(gemfileContent), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -822,7 +822,7 @@ gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
 		// Make sure env var is not set
 		os.Unsetenv("RAILS_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -844,7 +844,7 @@ gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
 		os.Setenv("RAILS_VERSION", "~> 7.1.0")
 		defer os.Unsetenv("RAILS_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -874,7 +874,7 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 		os.Setenv("MY_GEM_VERSION", "~> 2.0")
 		defer os.Unsetenv("MY_GEM_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -893,7 +893,7 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 	t.Run("ENV[] with env var not set", func(t *testing.T) {
 		os.Unsetenv("MY_GEM_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
