@@ -410,8 +410,8 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 		return false, false
 	}
 	envVarName := matches[1]
-	envVal := os.Getenv(envVarName)
-	result = envVal != ""
+	envVal, ok := os.LookupEnv(envVarName)
+	result = ok
 	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
 	return result, true
 }
