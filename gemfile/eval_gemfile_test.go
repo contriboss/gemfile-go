@@ -155,3 +155,63 @@ end
 		t.Errorf("Expected gem to be in 'test' group, got %v", gem.Groups)
 	}
 }
+
+func TestEvalGemfileRelativePaths(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create main Gemfile
+	mainGemfileContent := `
+source "https://rubygems.org"
+eval_gemfile "gemfiles/modular.gemfile"
+`
+	mainGemfilePath := filepath.Join(tmpDir, "Gemfile")
+	if err := os.WriteFile(mainGemfilePath, []byte(mainGemfileContent), 0600); err != nil {
+		t.Fatalf("Failed to write main Gemfile: %v", err)
+	}
+
+	// Create gemfiles directory
+	gemfilesDir := filepath.Join(tmpDir, "gemfiles")
+	if err := os.Mkdir(gemfilesDir, 0700); err != nil {
+		t.Fatalf("Failed to create gemfiles directory: %v", err)
+	}
+
+	// Create modular.gemfile with a relative path source and gemspec
+	modularGemfileContent := `
+gem "local_gem", path: "../local_gem"
+gemspec path: ".."
+`
+	modularGemfilePath := filepath.Join(gemfilesDir, "modular.gemfile")
+	if err := os.WriteFile(modularGemfilePath, []byte(modularGemfileContent), 0600); err != nil {
+		t.Fatalf("Failed to write modular Gemfile: %v", err)
+	}
+
+	parser := NewGemfileParser(mainGemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	// Check path gem
+	var foundLocalGem bool
+	expectedLocalGemPath := filepath.Clean(filepath.Join(tmpDir, "local_gem"))
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == "local_gem" {
+			foundLocalGem = true
+			if dep.Source == nil || dep.Source.URL != expectedLocalGemPath {
+				t.Errorf("Expected path %s, got %v", expectedLocalGemPath, dep.Source)
+			}
+		}
+	}
+	if !foundLocalGem {
+		t.Error("Expected to find 'local_gem' in dependencies")
+	}
+
+	// Check gemspec
+	if len(parsed.Gemspecs) != 1 {
+		t.Fatalf("Expected 1 gemspec, got %d", len(parsed.Gemspecs))
+	}
+	expectedGemspecPath := filepath.Clean(tmpDir)
+	if parsed.Gemspecs[0].Path != expectedGemspecPath {
+		t.Errorf("Expected gemspec path %s, got %s", expectedGemspecPath, parsed.Gemspecs[0].Path)
+	}
+}

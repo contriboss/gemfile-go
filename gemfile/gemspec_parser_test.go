@@ -387,8 +387,9 @@ func TestGemfileWithGemspecDirective(t *testing.T) {
 	}
 
 	// The gemspec directive should have default values
-	if parsed.Gemspecs[0].Path != "." {
-		t.Errorf("Expected default path '.', got %s", parsed.Gemspecs[0].Path)
+	expectedPath := filepath.Clean(filepath.Join("..", "testdata"))
+	if parsed.Gemspecs[0].Path != expectedPath {
+		t.Errorf("Expected default path '%s', got %s", expectedPath, parsed.Gemspecs[0].Path)
 	}
 	if parsed.Gemspecs[0].DevelopmentGroup != "development" {
 		t.Errorf("Expected default development group 'development', got %s", parsed.Gemspecs[0].DevelopmentGroup)

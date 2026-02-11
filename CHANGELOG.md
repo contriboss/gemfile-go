@@ -5,6 +5,17 @@
 ### Features
 
 * ✨ support `eval_gemfile` macro for modular Gemfiles
+* ✨ enhance Ruby logic support in Gemfiles:
+    - support `if/elsif/else/unless` blocks in main Gemfile and `eval_gemfile`
+    - support `ENV.fetch` with optional default values
+    - support `casecmp?` for case-insensitive environment variable comparisons
+    - provide warnings when evaluating `ENV` checks
+    - detect and warn/error on unsupported `RUBY_VERSION` and `RUBY_ENGINE` comparisons
+
+### Bug Fixes
+
+* fix relative path resolution for `eval_gemfile` to match Bundler behavior
+* ensure `gemspec` and `path:` sources are resolved relative to the Gemfile they are defined in
 
 ## [0.11.0](https://github.com/contriboss/gemfile-go/compare/v0.10.0...v0.11.0) (2026-02-11)
 
