@@ -71,6 +71,8 @@ func (s *parserContextStack) pop() {
 }
 
 // NewTreeSitterGemfileParser creates a new tree-sitter based Gemfile parser
+// The filePath parameter is used to resolve relative path: sources to absolute paths.
+// Pass an empty string if you don't need path resolution (e.g., for testing).
 func NewTreeSitterGemfileParser(content []byte, filePath string) *TreeSitterGemfileParser {
 	return &TreeSitterGemfileParser{
 		content:      content,
