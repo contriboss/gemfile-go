@@ -981,20 +981,40 @@ gem 'another_gem', path: './relative/path'
 		}
 	}
 
-	// Verify both parsers produce the same paths
-	for i := range parsed.Dependencies {
-		regexDep := &parsed.Dependencies[i]
-		tsDep := &tsParsed.Dependencies[i]
-
-		if regexDep.Name != tsDep.Name {
-			t.Errorf("Gem name mismatch at index %d: regex=%s, tree-sitter=%s",
-				i, regexDep.Name, tsDep.Name)
+	// Verify both parsers produce the same paths (order-independent)
+	regexDepsByName := make(map[string]string, len(parsed.Dependencies))
+	for _, dep := range parsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Missing source for gem %s in regex parser results", dep.Name)
 			continue
 		}
+		regexDepsByName[dep.Name] = dep.Source.URL
+	}
 
-		if regexDep.Source.URL != tsDep.Source.URL {
+	tsDepsByName := make(map[string]string, len(tsParsed.Dependencies))
+	for _, dep := range tsParsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Missing source for gem %s in tree-sitter results", dep.Name)
+			continue
+		}
+		tsDepsByName[dep.Name] = dep.Source.URL
+	}
+
+	for name, regexURL := range regexDepsByName {
+		tsURL, ok := tsDepsByName[name]
+		if !ok {
+			t.Errorf("Tree-sitter: missing gem %s present in regex parser results", name)
+			continue
+		}
+		if regexURL != tsURL {
 			t.Errorf("Path mismatch for gem %s: regex=%s, tree-sitter=%s",
-				regexDep.Name, regexDep.Source.URL, tsDep.Source.URL)
+				name, regexURL, tsURL)
+		}
+	}
+
+	for name := range tsDepsByName {
+		if _, ok := regexDepsByName[name]; !ok {
+			t.Errorf("Regex parser: missing gem %s present in tree-sitter results", name)
 		}
 	}
 }
