@@ -71,12 +71,17 @@ func (s *parserContextStack) pop() {
 }
 
 // NewTreeSitterGemfileParser creates a new tree-sitter based Gemfile parser
-// The filePath parameter is used to resolve relative path: sources to absolute paths.
-// Pass an empty string if you don't need path resolution (e.g., for testing).
-func NewTreeSitterGemfileParser(content []byte, filePath string) *TreeSitterGemfileParser {
+// The optional filePath parameter is used to resolve relative path: sources to absolute paths.
+// If not provided, defaults to empty string (no path resolution).
+// For backwards compatibility, this function accepts 0 or 1 filePath arguments.
+func NewTreeSitterGemfileParser(content []byte, filePath ...string) *TreeSitterGemfileParser {
+	path := ""
+	if len(filePath) > 0 {
+		path = filePath[0]
+	}
 	return &TreeSitterGemfileParser{
 		content:      content,
-		filepath:     filePath,
+		filepath:     path,
 		helper:       NewRubyASTHelper(content),
 		contextStack: newParserContextStack(),
 		variables:    make(map[string]string),
