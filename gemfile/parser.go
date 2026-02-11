@@ -422,10 +422,10 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 		return false, false
 	}
 	envVarName := matches[1]
-	envVal, envSet := os.LookupEnv(envVarName)
+	envVal, ok := os.LookupEnv(envVarName)
 	// In Ruby, ENV["X"] is truthy when the variable exists, even if set to empty string
 	// It's falsy only when the variable is unset (returns nil)
-	result = envSet
+	result = ok
 	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
 	return result, true
 }

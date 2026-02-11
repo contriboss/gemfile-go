@@ -68,14 +68,18 @@ end
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear relevant env vars
-			os.Unsetenv("KETTLE_RB_DEV")
-			os.Unsetenv("TEST_VAR")
-			os.Unsetenv("SKIP_GEM")
-			os.Unsetenv("RUBY_VERSION")
-
-			for k, v := range tt.env {
-				os.Setenv(k, v)
+			// Set up environment variables for this test case and ensure they are restored afterwards.
+			testEnvKeys := []string{"KETTLE_RB_DEV", "TEST_VAR", "SKIP_GEM", "RUBY_VERSION"}
+			for _, key := range testEnvKeys {
+				if v, ok := tt.env[key]; ok {
+					// Variable should be set for this test case.
+					t.Setenv(key, v)
+				} else {
+					// Variable should be unset for this test case.
+					// t.Setenv records the original value (or lack thereof) and will restore it.
+					t.Setenv(key, "")
+					os.Unsetenv(key)
+				}
 			}
 
 			parser := NewGemfileParser(gemfilePath)
@@ -151,14 +155,24 @@ end
 		t.Fatalf("Failed to write Gemfile: %v", err)
 	}
 
-	// Clear all env vars first
-	os.Unsetenv("UNSET_VAR")
-	os.Unsetenv("EMPTY_VAR")
-	os.Unsetenv("SET_VAR")
-
-	// Set EMPTY_VAR to empty string and SET_VAR to a value
-	os.Setenv("EMPTY_VAR", "")
-	os.Setenv("SET_VAR", "value")
+	// Set up environment variables for this test
+	testEnvKeys := []string{"UNSET_VAR", "EMPTY_VAR", "SET_VAR"}
+	envVars := map[string]string{
+		"EMPTY_VAR": "",
+		"SET_VAR":   "value",
+		// UNSET_VAR intentionally not in map
+	}
+	for _, key := range testEnvKeys {
+		if v, ok := envVars[key]; ok {
+			// Variable should be set for this test case.
+			t.Setenv(key, v)
+		} else {
+			// Variable should be unset for this test case.
+			// t.Setenv records the original value (or lack thereof) and will restore it.
+			t.Setenv(key, "")
+			os.Unsetenv(key)
+		}
+	}
 
 	parser := NewGemfileParser(gemfilePath)
 	parsed, err := parser.Parse()
@@ -225,14 +239,24 @@ end
 		t.Fatalf("Failed to write Gemfile: %v", err)
 	}
 
-	// Clear all env vars first
-	os.Unsetenv("UNSET_VAR")
-	os.Unsetenv("EMPTY_VAR")
-	os.Unsetenv("SET_VAR")
-
-	// Set EMPTY_VAR to empty string and SET_VAR to a value
-	os.Setenv("EMPTY_VAR", "")
-	os.Setenv("SET_VAR", "value")
+	// Set up environment variables for this test
+	testEnvKeys := []string{"UNSET_VAR", "EMPTY_VAR", "SET_VAR"}
+	envVars := map[string]string{
+		"EMPTY_VAR": "",
+		"SET_VAR":   "value",
+		// UNSET_VAR intentionally not in map
+	}
+	for _, key := range testEnvKeys {
+		if v, ok := envVars[key]; ok {
+			// Variable should be set for this test case.
+			t.Setenv(key, v)
+		} else {
+			// Variable should be unset for this test case.
+			// t.Setenv records the original value (or lack thereof) and will restore it.
+			t.Setenv(key, "")
+			os.Unsetenv(key)
+		}
+	}
 
 	parser := NewGemfileParser(gemfilePath)
 	parsed, err := parser.Parse()
