@@ -914,87 +914,87 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 // TestPathNormalizationConsistency verifies that both tree-sitter and regex parsers
 // normalize relative path sources consistently
 func TestPathNormalizationConsistency(t *testing.T) {
-gemfileContent := `source 'https://rubygems.org'
+	gemfileContent := `source 'https://rubygems.org'
 
 gem 'local_gem', path: '../vendor/local_gem'
 gem 'another_gem', path: './relative/path'
 `
 
-// Create a temporary directory structure
-tmpDir := t.TempDir()
-gemfilePath := filepath.Join(tmpDir, "Gemfile")
-err := os.WriteFile(gemfilePath, []byte(gemfileContent), 0644)
-if err != nil {
-t.Fatalf("Failed to write test Gemfile: %v", err)
-}
+	// Create a temporary directory structure
+	tmpDir := t.TempDir()
+	gemfilePath := filepath.Join(tmpDir, "Gemfile")
+	err := os.WriteFile(gemfilePath, []byte(gemfileContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", err)
+	}
 
-// Parse with the main parser (will use tree-sitter if conditions are met)
-parser := NewGemfileParser(gemfilePath)
-parsed, err := parser.Parse()
-if err != nil {
-t.Fatalf("Failed to parse Gemfile: %v", err)
-}
+	// Parse with the main parser (will use tree-sitter if conditions are met)
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
 
-// Also parse with tree-sitter explicitly
-tsParser := NewTreeSitterGemfileParser([]byte(gemfileContent), gemfilePath)
-tsParsed, err := tsParser.ParseWithTreeSitter()
-if err != nil {
-t.Fatalf("Tree-sitter parse failed: %v", err)
-}
+	// Also parse with tree-sitter explicitly
+	tsParser := NewTreeSitterGemfileParser([]byte(gemfileContent), gemfilePath)
+	tsParsed, err := tsParser.ParseWithTreeSitter()
+	if err != nil {
+		t.Fatalf("Tree-sitter parse failed: %v", err)
+	}
 
-// Verify we have the expected gems
-if len(parsed.Dependencies) != 2 {
-t.Fatalf("Expected 2 dependencies, got %d", len(parsed.Dependencies))
-}
+	// Verify we have the expected gems
+	if len(parsed.Dependencies) != 2 {
+		t.Fatalf("Expected 2 dependencies, got %d", len(parsed.Dependencies))
+	}
 
-if len(tsParsed.Dependencies) != 2 {
-t.Fatalf("Tree-sitter: Expected 2 dependencies, got %d", len(tsParsed.Dependencies))
-}
+	if len(tsParsed.Dependencies) != 2 {
+		t.Fatalf("Tree-sitter: Expected 2 dependencies, got %d", len(tsParsed.Dependencies))
+	}
 
-// Check that paths are normalized (absolute)
-for _, dep := range parsed.Dependencies {
-if dep.Source == nil {
-t.Errorf("Expected source for gem %s", dep.Name)
-continue
-}
-if dep.Source.Type != "path" {
-t.Errorf("Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
-continue
-}
-if !filepath.IsAbs(dep.Source.URL) {
-t.Errorf("Expected absolute path for gem %s, got %s", dep.Name, dep.Source.URL)
-}
-}
+	// Check that paths are normalized (absolute)
+	for _, dep := range parsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Expected source for gem %s", dep.Name)
+			continue
+		}
+		if dep.Source.Type != "path" {
+			t.Errorf("Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
+			continue
+		}
+		if !filepath.IsAbs(dep.Source.URL) {
+			t.Errorf("Expected absolute path for gem %s, got %s", dep.Name, dep.Source.URL)
+		}
+	}
 
-// Check tree-sitter results
-for _, dep := range tsParsed.Dependencies {
-if dep.Source == nil {
-t.Errorf("Tree-sitter: Expected source for gem %s", dep.Name)
-continue
-}
-if dep.Source.Type != "path" {
-t.Errorf("Tree-sitter: Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
-continue
-}
-if !filepath.IsAbs(dep.Source.URL) {
-t.Errorf("Tree-sitter: Expected absolute path for gem %s, got %s", dep.Name, dep.Source.URL)
-}
-}
+	// Check tree-sitter results
+	for _, dep := range tsParsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Tree-sitter: Expected source for gem %s", dep.Name)
+			continue
+		}
+		if dep.Source.Type != "path" {
+			t.Errorf("Tree-sitter: Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
+			continue
+		}
+		if !filepath.IsAbs(dep.Source.URL) {
+			t.Errorf("Tree-sitter: Expected absolute path for gem %s, got %s", dep.Name, dep.Source.URL)
+		}
+	}
 
-// Verify both parsers produce the same paths
-for i := range parsed.Dependencies {
-regexDep := &parsed.Dependencies[i]
-tsDep := &tsParsed.Dependencies[i]
+	// Verify both parsers produce the same paths
+	for i := range parsed.Dependencies {
+		regexDep := &parsed.Dependencies[i]
+		tsDep := &tsParsed.Dependencies[i]
 
-if regexDep.Name != tsDep.Name {
-t.Errorf("Gem name mismatch at index %d: regex=%s, tree-sitter=%s",
-i, regexDep.Name, tsDep.Name)
-continue
-}
+		if regexDep.Name != tsDep.Name {
+			t.Errorf("Gem name mismatch at index %d: regex=%s, tree-sitter=%s",
+				i, regexDep.Name, tsDep.Name)
+			continue
+		}
 
-if regexDep.Source.URL != tsDep.Source.URL {
-t.Errorf("Path mismatch for gem %s: regex=%s, tree-sitter=%s",
-regexDep.Name, regexDep.Source.URL, tsDep.Source.URL)
-}
-}
+		if regexDep.Source.URL != tsDep.Source.URL {
+			t.Errorf("Path mismatch for gem %s: regex=%s, tree-sitter=%s",
+				regexDep.Name, regexDep.Source.URL, tsDep.Source.URL)
+		}
+	}
 }
