@@ -64,6 +64,17 @@ end
 			expectedGems: []string{"kettle-dev", "test-gem-2"},
 			excludedGems: []string{"test-gem-1", "test-gem-default", "not-skipped", "modern-ruby-gem"},
 		},
+		{
+			name: "KETTLE_RB_DEV empty string (should use empty, not default 'false')",
+			env: map[string]string{
+				"KETTLE_RB_DEV": "",
+				"TEST_VAR":      "1",
+				"RUBY_VERSION":  "3.2.0",
+			},
+			// Empty string != "true", so should use else branch (version 2.0.0)
+			expectedGems: []string{"kettle-dev", "test-gem-1", "not-skipped"},
+			excludedGems: []string{"test-gem-2", "test-gem-default", "modern-ruby-gem"},
+		},
 	}
 
 	for _, tt := range tests {

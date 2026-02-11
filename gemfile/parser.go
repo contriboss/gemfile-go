@@ -342,9 +342,9 @@ func (p *GemfileParser) evaluateEnvFetchCasecmp(condition string) (result, handl
 	targetValue := matches[3]
 
 	const defaultValueLabel = "default value"
-	envVal := os.Getenv(envVarName)
+	envVal, ok := os.LookupEnv(envVarName)
 	evalSource := envConstant
-	if envVal == "" {
+	if !ok {
 		envVal = defaultValue
 		evalSource = defaultValueLabel
 	}
@@ -364,9 +364,9 @@ func (p *GemfileParser) evaluateEnvFetchEq(condition string) (result, handled bo
 	targetValue := matches[3]
 
 	const defaultValueLabel = "default value"
-	envVal := os.Getenv(envVarName)
+	envVal, ok := os.LookupEnv(envVarName)
 	evalSource := envConstant
-	if envVal == "" {
+	if !ok {
 		envVal = defaultValue
 		evalSource = defaultValueLabel
 	}
@@ -894,7 +894,7 @@ func (p *GemfileParser) expandEnvFetch(line string) string {
 		}
 
 		// Look up environment variable
-		if value := os.Getenv(envVarName); value != "" {
+		if value, ok := os.LookupEnv(envVarName); ok {
 			return fmt.Sprintf("'%s'", value)
 		}
 

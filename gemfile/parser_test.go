@@ -861,6 +861,30 @@ gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
 			t.Errorf("expected constraint '~> 7.1.0', got %v", as.Constraints)
 		}
 	})
+
+	t.Run("ENV.fetch with empty string env var", func(t *testing.T) {
+		// Set env var to empty string
+		os.Setenv("RAILS_VERSION", "")
+		defer os.Unsetenv("RAILS_VERSION")
+
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+
+		// Find activesupport gem
+		as := findGem(parsed.Dependencies, "activesupport")
+		if as == nil {
+			t.Fatal("expected activesupport gem to be parsed")
+		}
+
+		// Should use empty string from env var, NOT the default value
+		// Ruby: ENV.fetch("X", "default") returns "" when ENV["X"] == ""
+		if len(as.Constraints) != 0 {
+			t.Errorf("expected no constraints (empty string), got %v", as.Constraints)
+		}
+	})
 }
 
 func TestEnvElementReferenceSupport(t *testing.T) {

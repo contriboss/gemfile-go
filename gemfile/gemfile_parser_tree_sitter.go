@@ -687,7 +687,7 @@ func (p *TreeSitterGemfileParser) evaluateEnvCall(node *tree_sitter.Node) string
 		return ""
 	}
 
-	if value := lookupEnv(envVarName); value != "" {
+	if value, ok := os.LookupEnv(envVarName); ok {
 		return value
 	}
 	return defaultValue
