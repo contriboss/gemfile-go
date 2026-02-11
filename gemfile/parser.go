@@ -431,6 +431,7 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
 	}
 	return result, true
+	return result, true
 }
 
 // parseLine parses a single line of the Gemfile
