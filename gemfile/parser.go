@@ -383,9 +383,15 @@ func (p *GemfileParser) evaluateEnvEq(condition string) (result, handled bool) {
 	}
 	envVarName := matches[1]
 	targetValue := matches[2]
-	envVal := os.Getenv(envVarName)
-	result = envVal == targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) == %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	envVal, envSet := os.LookupEnv(envVarName)
+	// In Ruby, ENV["X"] returns nil when unset, so ENV["X"] == "" is false when X is unset
+	if !envSet {
+		result = false
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=<unset>) == %s -> %v\n", condition, envVarName, targetValue, result)
+	} else {
+		result = envVal == targetValue
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) == %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	}
 	return result, true
 }
 
@@ -397,9 +403,15 @@ func (p *GemfileParser) evaluateEnvNeq(condition string) (result, handled bool) 
 	}
 	envVarName := matches[1]
 	targetValue := matches[2]
-	envVal := os.Getenv(envVarName)
-	result = envVal != targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) != %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	envVal, envSet := os.LookupEnv(envVarName)
+	// In Ruby, ENV["X"] returns nil when unset, so ENV["X"] != "" is true when X is unset
+	if !envSet {
+		result = true
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=<unset>) != %s -> %v\n", condition, envVarName, targetValue, result)
+	} else {
+		result = envVal != targetValue
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) != %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	}
 	return result, true
 }
 
@@ -411,8 +423,14 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 	}
 	envVarName := matches[1]
 	envVal, ok := os.LookupEnv(envVarName)
-	result = ok
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
+	if !ok {
+		result = false
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=<unset>) -> %v\n", condition, envVarName, result)
+	} else {
+		result = true
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
+	}
+	return result, true
 	return result, true
 }
 
