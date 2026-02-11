@@ -94,7 +94,7 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 
 	// Try tree-sitter first (handles complex Ruby constructs like nested blocks)
 	// Note: Currently experimental - falls back to regex for edge cases
-	tsParser := NewTreeSitterGemfileParser([]byte(p.content))
+	tsParser := NewTreeSitterGemfileParser([]byte(p.content), p.filepath)
 	gemfile, tsErr := tsParser.ParseWithTreeSitter()
 
 	// Use tree-sitter result if it found content AND no gemspec directives
