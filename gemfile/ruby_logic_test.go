@@ -68,14 +68,18 @@ end
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear relevant env vars
-			os.Unsetenv("KETTLE_RB_DEV")
-			os.Unsetenv("TEST_VAR")
-			os.Unsetenv("SKIP_GEM")
-			os.Unsetenv("RUBY_VERSION")
-
-			for k, v := range tt.env {
-				os.Setenv(k, v)
+			// Set up environment variables for this test case and ensure they are restored afterwards.
+			testEnvKeys := []string{"KETTLE_RB_DEV", "TEST_VAR", "SKIP_GEM", "RUBY_VERSION"}
+			for _, key := range testEnvKeys {
+				if v, ok := tt.env[key]; ok {
+					// Variable should be set for this test case.
+					t.Setenv(key, v)
+				} else {
+					// Variable should be unset for this test case.
+					// t.Setenv records the original value (or lack thereof) and will restore it.
+					t.Setenv(key, "")
+					os.Unsetenv(key)
+				}
 			}
 
 			parser := NewGemfileParser(gemfilePath)
