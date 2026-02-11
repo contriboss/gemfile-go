@@ -69,22 +69,13 @@ end
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up environment variables for this test case and ensure they are restored afterwards.
-			testEnvKeys := []string{"KETTLE_RB_DEV", "TEST_VAR", "SKIP_GEM", "RUBY_VERSION"}
-			for _, key := range testEnvKeys {
-				if v, ok := tt.env[key]; ok {
-					// Variable should be set for this test case.
-					t.Setenv(key, v)
-				} else {
-					// Variable should be unset for this test case.
-					// t.Setenv records the original value (or lack thereof) and will restore it.
-					t.Setenv(key, "")
-					os.Unsetenv(key)
-				}
+			// Set environment variables for this test
+			for k, v := range tt.env {
+				t.Setenv(k, v)
 			}
 
 			parser := NewGemfileParser(gemfilePath)
-			parsed, err := parser.Parse()
+			_, err := parser.Parse()
 			// Now expect an error because of RUBY_VERSION condition
 			if err == nil {
 				t.Fatal("Expected error due to RUBY_VERSION condition, but got none")
@@ -92,8 +83,6 @@ end
 			if !strings.Contains(err.Error(), "RUBY_VERSION") {
 				t.Errorf("Expected error to mention RUBY_VERSION, got: %v", err)
 			}
-			// The rest of the test doesn't apply since parsing should fail
-			_ = parsed
 		})
 	}
 }
