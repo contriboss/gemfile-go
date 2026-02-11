@@ -349,7 +349,7 @@ func (p *GemfileParser) evaluateEnvFetchCasecmp(condition string) (result, handl
 		evalSource = defaultValueLabel
 	}
 	result = strings.EqualFold(envVal, targetValue)
-	fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) casecmp? %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] using %s -> %v\n", envVarName, evalSource, result)
 	return result, true
 }
 
@@ -371,7 +371,7 @@ func (p *GemfileParser) evaluateEnvFetchEq(condition string) (result, handled bo
 		evalSource = defaultValueLabel
 	}
 	result = envVal == targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) == %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] using %s -> %v\n", envVarName, evalSource, result)
 	return result, true
 }
 
@@ -385,7 +385,7 @@ func (p *GemfileParser) evaluateEnvEq(condition string) (result, handled bool) {
 	targetValue := matches[2]
 	envVal := os.Getenv(envVarName)
 	result = envVal == targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) == %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
 	return result, true
 }
 
@@ -399,7 +399,7 @@ func (p *GemfileParser) evaluateEnvNeq(condition string) (result, handled bool) 
 	targetValue := matches[2]
 	envVal := os.Getenv(envVarName)
 	result = envVal != targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) != %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
 	return result, true
 }
 
@@ -410,9 +410,9 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 		return false, false
 	}
 	envVarName := matches[1]
-	envVal, ok := os.LookupEnv(envVarName)
+	_, ok := os.LookupEnv(envVarName)
 	result = ok
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
 	return result, true
 }
 
