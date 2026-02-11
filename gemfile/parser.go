@@ -423,8 +423,6 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 	}
 	envVarName := matches[1]
 	envVal, ok := os.LookupEnv(envVarName)
-	// In Ruby, ENV["X"] is truthy when the variable exists, even if set to empty string
-	// It's falsy only when the variable is unset (returns nil)
 	result = ok
 	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
 	return result, true
@@ -821,9 +819,6 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 
 	// If it's just "gemspec" with no options, return defaults
 	if strings.TrimSpace(line) == gemspecDirective {
-		// If the path is relative (which "." is), make it relative to the current Gemfile
-		dir := filepath.Dir(p.filepath)
-		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
 		return gemspecRef
 	}
 
@@ -832,12 +827,6 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 	p.parseGemspecOption(line, "name", &gemspecRef.Name)
 	p.parseGemspecOption(line, "development_group", &gemspecRef.DevelopmentGroup)
 	p.parseGemspecOption(line, "glob", &gemspecRef.Glob)
-
-	// If the path is relative, make it relative to the current Gemfile
-	if !filepath.IsAbs(gemspecRef.Path) {
-		dir := filepath.Dir(p.filepath)
-		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
-	}
 
 	return gemspecRef
 }
