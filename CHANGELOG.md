@@ -5,6 +5,12 @@
 ### Features
 
 * ✨ support `eval_gemfile` macro for modular Gemfiles
+* ✨ enhance Ruby logic support in Gemfiles:
+    - support `if/elsif/else/unless` blocks in main Gemfile and `eval_gemfile`
+    - support `ENV.fetch` with optional default values
+    - support `casecmp?` for case-insensitive environment variable comparisons
+    - provide warnings when evaluating `ENV` checks
+    - detect and warn/error on unsupported `RUBY_VERSION` and `RUBY_ENGINE` comparisons
 
 ### Bug Fixes
 

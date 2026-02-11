@@ -102,7 +102,9 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 	useTreeSitter := tsErr == nil &&
 		(len(gemfile.Dependencies) > 0 || gemfile.RubyVersion != "") &&
 		len(gemfile.Gemspecs) == 0 &&
-		!strings.Contains(p.content, "eval_gemfile")
+		!strings.Contains(p.content, "eval_gemfile") &&
+		!strings.Contains(p.content, "if ") &&
+		!strings.Contains(p.content, "unless ")
 
 	if useTreeSitter {
 		return gemfile, nil
@@ -146,6 +148,17 @@ func (h *conditionalHandler) handleLine(line string) (handled, skipLine bool) {
 	if strings.HasPrefix(line, "if ") {
 		condition := strings.TrimPrefix(line, "if ")
 		isTrue := h.parser.evaluateCondition(condition)
+		h.stack = append(h.stack, conditionalState{
+			inConditional: true,
+			branchActive:  isTrue,
+			conditionMet:  isTrue,
+			depth:         1,
+		})
+		return true, true
+	}
+	if strings.HasPrefix(line, "unless ") {
+		condition := strings.TrimPrefix(line, "unless ")
+		isTrue := !h.parser.evaluateCondition(condition)
 		h.stack = append(h.stack, conditionalState{
 			inConditional: true,
 			branchActive:  isTrue,
@@ -255,30 +268,87 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 }
 
 // evaluateCondition evaluates simple Ruby conditions (ENV comparisons)
+// Returns true if condition is met, and false otherwise.
+// If the condition is unsupported (e.g. RUBY_VERSION), it prints a warning/error and returns false.
 func (p *GemfileParser) evaluateCondition(condition string) bool {
 	condition = strings.TrimSpace(condition)
+
+	// Handle ENV.fetch("VAR", "default").casecmp?("value")
+	envFetchCasecmpRe := regexp.MustCompile(`ENV\.fetch\s*\(\s*["']([^"']+)["']\s*(?:,\s*["']([^"']*)["'])?\s*\)\.casecmp\?\(\s*["']([^"']+)["']\s*\)`)
+	if matches := envFetchCasecmpRe.FindStringSubmatch(condition); len(matches) == 4 {
+		envVarName := matches[1]
+		defaultValue := matches[2]
+		targetValue := matches[3]
+
+		envVal := os.Getenv(envVarName)
+		evalSource := "ENV"
+		if envVal == "" {
+			envVal = defaultValue
+			evalSource = "default value"
+		}
+		result := strings.EqualFold(envVal, targetValue)
+		fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) casecmp? %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+		return result
+	}
+
+	// Handle ENV.fetch("VAR", "default") == "value"
+	envFetchEqRe := regexp.MustCompile(`ENV\.fetch\s*\(\s*["']([^"']+)["']\s*(?:,\s*["']([^"']*)["'])?\s*\)\s*==\s*["']([^"']*)["']`)
+	if matches := envFetchEqRe.FindStringSubmatch(condition); len(matches) == 4 {
+		envVarName := matches[1]
+		defaultValue := matches[2]
+		targetValue := matches[3]
+
+		envVal := os.Getenv(envVarName)
+		evalSource := "ENV"
+		if envVal == "" {
+			envVal = defaultValue
+			evalSource = "default value"
+		}
+		result := envVal == targetValue
+		fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) == %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+		return result
+	}
 
 	// Handle ENV["VAR"] == "value"
 	envEqRe := regexp.MustCompile(`ENV\s*\[\s*["']([^"']+)["']\s*\]\s*==\s*["']([^"']*)["']`)
 	if matches := envEqRe.FindStringSubmatch(condition); len(matches) == 3 {
-		envVal := os.Getenv(matches[1])
-		return envVal == matches[2]
+		envVarName := matches[1]
+		targetValue := matches[2]
+		envVal := os.Getenv(envVarName)
+		result := envVal == targetValue
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) == %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+		return result
 	}
 
 	// Handle ENV["VAR"] != "value"
 	envNeqRe := regexp.MustCompile(`ENV\s*\[\s*["']([^"']+)["']\s*\]\s*!=\s*["']([^"']*)["']`)
 	if matches := envNeqRe.FindStringSubmatch(condition); len(matches) == 3 {
-		envVal := os.Getenv(matches[1])
-		return envVal != matches[2]
+		envVarName := matches[1]
+		targetValue := matches[2]
+		envVal := os.Getenv(envVarName)
+		result := envVal != targetValue
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) != %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+		return result
 	}
 
 	// Handle ENV["VAR"] (truthy check)
 	envTruthyRe := regexp.MustCompile(`^ENV\s*\[\s*["']([^"']+)["']\s*\]$`)
 	if matches := envTruthyRe.FindStringSubmatch(condition); len(matches) == 2 {
-		return os.Getenv(matches[1]) != ""
+		envVarName := matches[1]
+		envVal := os.Getenv(envVarName)
+		result := envVal != ""
+		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
+		return result
 	}
 
-	// Unknown condition - default to true (include all gems)
+	// Handle RUBY_VERSION or RUBY_ENGINE - these are not supported and should raise an error/warning
+	if strings.Contains(condition, "RUBY_VERSION") || strings.Contains(condition, "RUBY_ENGINE") {
+		fmt.Printf("Error: Unsupported Ruby logic detected: %s. Please use Bundler to install.\n", condition)
+		return false
+	}
+
+	// Unknown condition - default to true (include all gems) but print warning
+	fmt.Printf("Warning: Unknown or complex Ruby logic detected: %s. Defaulting to true.\n", condition)
 	return true
 }
 
