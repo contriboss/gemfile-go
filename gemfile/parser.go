@@ -807,9 +807,6 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 
 	// If it's just "gemspec" with no options, return defaults
 	if strings.TrimSpace(line) == gemspecDirective {
-		// If the path is relative (which "." is), make it relative to the current Gemfile
-		dir := filepath.Dir(p.filepath)
-		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
 		return gemspecRef
 	}
 
@@ -818,12 +815,6 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 	p.parseGemspecOption(line, "name", &gemspecRef.Name)
 	p.parseGemspecOption(line, "development_group", &gemspecRef.DevelopmentGroup)
 	p.parseGemspecOption(line, "glob", &gemspecRef.Glob)
-
-	// If the path is relative, make it relative to the current Gemfile
-	if !filepath.IsAbs(gemspecRef.Path) {
-		dir := filepath.Dir(p.filepath)
-		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
-	}
 
 	return gemspecRef
 }

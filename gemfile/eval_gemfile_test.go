@@ -210,8 +210,8 @@ gemspec path: ".."
 	if len(parsed.Gemspecs) != 1 {
 		t.Fatalf("Expected 1 gemspec, got %d", len(parsed.Gemspecs))
 	}
-	expectedGemspecPath := filepath.Clean(tmpDir)
-	if parsed.Gemspecs[0].Path != expectedGemspecPath {
-		t.Errorf("Expected gemspec path %s, got %s", expectedGemspecPath, parsed.Gemspecs[0].Path)
+	// Path should be the raw path from the Gemfile: ".."
+	if parsed.Gemspecs[0].Path != ".." {
+		t.Errorf("Expected gemspec path '..', got %s", parsed.Gemspecs[0].Path)
 	}
 }
