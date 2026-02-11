@@ -71,10 +71,10 @@ func (s *parserContextStack) pop() {
 }
 
 // NewTreeSitterGemfileParser creates a new tree-sitter based Gemfile parser
-func NewTreeSitterGemfileParser(content []byte, filepath string) *TreeSitterGemfileParser {
+func NewTreeSitterGemfileParser(content []byte, filePath string) *TreeSitterGemfileParser {
 	return &TreeSitterGemfileParser{
 		content:      content,
-		filepath:     filepath,
+		filepath:     filePath,
 		helper:       NewRubyASTHelper(content),
 		contextStack: newParserContextStack(),
 		variables:    make(map[string]string),
