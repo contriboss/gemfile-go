@@ -202,7 +202,7 @@ gemspec path: "gems", name: "custom_gem", development_group: :test
 			t.Errorf("Expected 1 gemspec, got %d", len(parsed.Gemspecs))
 		} else {
 			gemspecRef := parsed.Gemspecs[0]
-			expectedPath := filepath.Clean(filepath.Join(tmpDir, "gems"))
+			expectedPath := "gems"
 			if gemspecRef.Path != expectedPath {
 				t.Errorf("Expected path '%s', got %s", expectedPath, gemspecRef.Path)
 			}

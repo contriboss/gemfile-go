@@ -303,7 +303,7 @@ gem 'redis', :source => 'https://gems.example.com'
 		t.Fatal("Expected gemspec to be parsed")
 	}
 	gs := parsed.Gemspecs[0]
-	expectedGemspecPath := filepath.Clean(tmpDir)
+	expectedGemspecPath := "./"
 	if gs.Path != expectedGemspecPath {
 		t.Errorf("Expected gemspec path '%s', got %s", expectedGemspecPath, gs.Path)
 	}
