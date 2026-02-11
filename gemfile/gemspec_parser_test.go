@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -423,9 +422,22 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 	// When parsing a Gemfile via a relative path like "testdata/subdir/Gemfile",
 	// ensure LoadGemspecDependencies doesn't incorrectly search in "testdata/subdir/testdata/subdir"
 
-	// This test runs from gemfile/ directory, so we need to go up one level
-	// to access testdata/ at the repo root
-	relativePath := "../testdata/gemspec_relative_test/Gemfile"
+	// Build path relative to current test directory (gemfile/)
+	// This works regardless of where the tests are run from
+	testGemfilePath, err := filepath.Abs("../testdata/gemspec_relative_test/Gemfile")
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+	
+	// Make it relative to current directory for the test
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	relativePath, err := filepath.Rel(cwd, testGemfilePath)
+	if err != nil {
+		t.Fatalf("Failed to make relative path: %v", err)
+	}
 	
 	// Verify the file exists before parsing
 	if _, err := os.Stat(relativePath); os.IsNotExist(err) {
@@ -448,19 +460,15 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 		t.Errorf("Expected gemspec path to be '.', got %s", parsed.Gemspecs[0].Path)
 	}
 
-	// The key test: dependencies should be loaded from ../testdata/gemspec_relative_test/test_relative.gemspec,
-	// NOT from ../testdata/gemspec_relative_test/testdata/gemspec_relative_test/test_relative.gemspec
-	// (which would be the double-join bug)
-	// 
+	// The key test: dependencies should be loaded from the correct location
 	// With our fix, LoadGemspecDependencies should correctly resolve:
-	//   gemfileDir = "../testdata/gemspec_relative_test" 
-	//                (from filepath.Dir("../testdata/gemspec_relative_test/Gemfile"))
+	//   gemfileDir = filepath.Dir(relativePath)
 	//   gemspecRef.Path = "." (raw path from Gemfile)
-	//   searchPath = filepath.Join("../testdata/gemspec_relative_test", ".") 
-	//              = "../testdata/gemspec_relative_test" ✓
+	//   searchPath = filepath.Join(gemfileDir, ".") = gemfileDir ✓
 	
-	// Verify the gem itself was loaded (test_relative from testdata/gemspec_relative_test/test_relative.gemspec)
+	// Verify the gem itself was loaded
 	var foundTestRelative bool
+	var testRelativePath string
 	for _, dep := range parsed.Dependencies {
 		if dep.Name == "test_relative" {
 			foundTestRelative = true
@@ -468,16 +476,15 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 			if dep.Source == nil || dep.Source.Type != "path" {
 				t.Errorf("Expected test_relative to be a path dependency, got %v", dep.Source)
 			}
-			// The path should point to ../testdata/gemspec_relative_test (where the gemspec is)
-			// It should NOT contain a double path like "gemspec_relative_test/gemspec_relative_test"
 			if dep.Source != nil {
-				if strings.Contains(dep.Source.URL, "gemspec_relative_test/gemspec_relative_test") {
-					t.Errorf("Found double-join bug: path contains doubled directory: %s", dep.Source.URL)
+				testRelativePath = filepath.Clean(dep.Source.URL)
+				// The canonical path should not have repeated directory components
+				// Get the expected path (directory where the gemspec is)
+				expectedPath := filepath.Clean(filepath.Dir(relativePath))
+				if testRelativePath != expectedPath {
+					t.Errorf("Expected path %s, got %s", expectedPath, testRelativePath)
 				}
-				if strings.Contains(dep.Source.URL, "testdata/testdata") {
-					t.Errorf("Found double-join bug: path contains 'testdata/testdata': %s", dep.Source.URL)
-				}
-				t.Logf("test_relative source path (correct): %s", dep.Source.URL)
+				t.Logf("test_relative source path (correct): %s", testRelativePath)
 			}
 			break
 		}
