@@ -1,8 +1,10 @@
 package gemfile
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -222,7 +224,7 @@ func TestFindGemspecs(t *testing.T) {
 			basePath:      testDataPath,
 			glob:          "",
 			nameFilter:    "",
-			expectedCount: 3, // test_gem.gemspec, another_gem.gemspec, exotic.gemspec
+			expectedCount: 4, // test_gem.gemspec, another_gem.gemspec, exotic.gemspec, gemspec_relative_test/test_relative.gemspec
 			shouldError:   false,
 		},
 		{
@@ -413,5 +415,107 @@ func TestGemfileWithGemspecDirective(t *testing.T) {
 	// Check ruby version
 	if parsed.RubyVersion != "3.0.0" {
 		t.Errorf("Expected ruby version '3.0.0', got %s", parsed.RubyVersion)
+	}
+}
+
+func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
+	// Regression test for double-joining bug:
+	// When parsing a Gemfile via a relative path like "testdata/subdir/Gemfile",
+	// ensure LoadGemspecDependencies doesn't incorrectly search in "testdata/subdir/testdata/subdir"
+
+	// This test runs from gemfile/ directory, so we need to go up one level
+	// to access testdata/ at the repo root
+	relativePath := "../testdata/gemspec_relative_test/Gemfile"
+	
+	// Verify the file exists before parsing
+	if _, err := os.Stat(relativePath); os.IsNotExist(err) {
+		t.Skipf("Test file not found at %s, skipping test", relativePath)
+	}
+
+	parser := NewGemfileParser(relativePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile with relative path: %v", err)
+	}
+
+	// Verify gemspec was found
+	if len(parsed.Gemspecs) != 1 {
+		t.Errorf("Expected 1 gemspec reference, got %d", len(parsed.Gemspecs))
+	}
+
+	// Verify gemspec path is stored as raw value
+	if parsed.Gemspecs[0].Path != "." {
+		t.Errorf("Expected gemspec path to be '.', got %s", parsed.Gemspecs[0].Path)
+	}
+
+	// The key test: dependencies should be loaded from ../testdata/gemspec_relative_test/test_relative.gemspec,
+	// NOT from ../testdata/gemspec_relative_test/testdata/gemspec_relative_test/test_relative.gemspec
+	// (which would be the double-join bug)
+	// 
+	// With our fix, LoadGemspecDependencies should correctly resolve:
+	//   gemfileDir = "../testdata/gemspec_relative_test" 
+	//                (from filepath.Dir("../testdata/gemspec_relative_test/Gemfile"))
+	//   gemspecRef.Path = "." (raw path from Gemfile)
+	//   searchPath = filepath.Join("../testdata/gemspec_relative_test", ".") 
+	//              = "../testdata/gemspec_relative_test" ✓
+	
+	// Verify the gem itself was loaded (test_relative from testdata/gemspec_relative_test/test_relative.gemspec)
+	var foundTestRelative bool
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == "test_relative" {
+			foundTestRelative = true
+			// Verify it's a path dependency
+			if dep.Source == nil || dep.Source.Type != "path" {
+				t.Errorf("Expected test_relative to be a path dependency, got %v", dep.Source)
+			}
+			// The path should point to ../testdata/gemspec_relative_test (where the gemspec is)
+			// It should NOT contain a double path like "gemspec_relative_test/gemspec_relative_test"
+			if dep.Source != nil {
+				if strings.Contains(dep.Source.URL, "gemspec_relative_test/gemspec_relative_test") {
+					t.Errorf("Found double-join bug: path contains doubled directory: %s", dep.Source.URL)
+				}
+				if strings.Contains(dep.Source.URL, "testdata/testdata") {
+					t.Errorf("Found double-join bug: path contains 'testdata/testdata': %s", dep.Source.URL)
+				}
+				t.Logf("test_relative source path (correct): %s", dep.Source.URL)
+			}
+			break
+		}
+	}
+	if !foundTestRelative {
+		// Log all dependencies for debugging
+		t.Logf("Total dependencies found: %d", len(parsed.Dependencies))
+		for i, dep := range parsed.Dependencies {
+			srcInfo := "nil"
+			if dep.Source != nil {
+				srcInfo = dep.Source.URL
+			}
+			t.Logf("  Dependency %d: %s (source: %s)", i, dep.Name, srcInfo)
+		}
+		t.Error("Expected to find 'test_relative' in dependencies loaded from gemspec (fix may not be working)")
+	}
+
+	// Verify runtime dependencies from the gemspec were also loaded
+	var foundRack bool
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == "rack" {
+			foundRack = true
+			break
+		}
+	}
+	if !foundRack {
+		t.Error("Expected to find 'rack' (runtime dependency from gemspec)")
+	}
+
+	// Also verify that gems directly in the Gemfile are still parsed
+	var foundPuma bool
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == "puma" {
+			foundPuma = true
+			break
+		}
+	}
+	if !foundPuma {
+		t.Error("Expected to find 'puma' (gem directly in Gemfile)")
 	}
 }
