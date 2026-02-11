@@ -74,6 +74,7 @@ func (s *parserContextStack) pop() {
 // The optional filePath parameter is used to resolve relative path: sources to absolute paths.
 // If not provided, defaults to empty string (no path resolution).
 // For backwards compatibility, this function accepts 0 or 1 filePath arguments.
+// Only the first filePath argument is used; additional arguments are ignored.
 func NewTreeSitterGemfileParser(content []byte, filePath ...string) *TreeSitterGemfileParser {
 	path := ""
 	if len(filePath) > 0 {
