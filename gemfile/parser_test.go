@@ -346,8 +346,8 @@ gem 'redis', :source => 'https://gems.example.com'
 			branch:     "master",
 		},
 		"sqlite3": {
-			sourceType: "path",
-			sourceURL:  filepath.Clean(filepath.Join(tmpDir, "vendor/sqlite3")),
+			sourceType: pathSource,
+			sourceURL:  filepath.Clean(filepath.Join(tmpDir, "vendor", "sqlite3")),
 		},
 		"redis": {
 			sourceType: "rubygems",

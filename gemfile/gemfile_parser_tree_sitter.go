@@ -35,7 +35,7 @@ type parserContextStack struct {
 func newParserContextStack() *parserContextStack {
 	return &parserContextStack{
 		current: &parserContext{
-			groups: []string{"default"},
+			groups: []string{defaultGroup},
 		},
 	}
 }
@@ -534,31 +534,31 @@ func (p *TreeSitterGemfileParser) applyGemOption(key, value string, dep *GemDepe
 		} else {
 			dep.Source.URL = value
 		}
-	case "path":
+	case pathSource:
 		// Always create a new source for explicit path options
-		dep.Source = &Source{Type: "path"}
+		dep.Source = &Source{Type: pathSource}
 		dep.Source.URL = value
 	case sourceKey:
 		// Always create a new rubygems source for explicit source options
 		if value != "" {
-			dep.Source = &Source{Type: "rubygems", URL: value}
+			dep.Source = &Source{Type: rubygemsSource, URL: value}
 		}
 	case "branch":
 		// Create new git source if nil or not git (to avoid mutating context source)
-		if dep.Source == nil || dep.Source.Type != gitKey {
-			dep.Source = &Source{Type: gitKey}
+		if dep.Source == nil || dep.Source.Type != gitSource {
+			dep.Source = &Source{Type: gitSource}
 		}
 		dep.Source.Branch = value
 	case "tag":
 		// Create new git source if nil or not git (to avoid mutating context source)
-		if dep.Source == nil || dep.Source.Type != gitKey {
-			dep.Source = &Source{Type: gitKey}
+		if dep.Source == nil || dep.Source.Type != gitSource {
+			dep.Source = &Source{Type: gitSource}
 		}
 		dep.Source.Tag = value
 	case "ref":
 		// Create new git source if nil or not git (to avoid mutating context source)
-		if dep.Source == nil || dep.Source.Type != gitKey {
-			dep.Source = &Source{Type: gitKey}
+		if dep.Source == nil || dep.Source.Type != gitSource {
+			dep.Source = &Source{Type: gitSource}
 		}
 		dep.Source.Ref = value
 	}

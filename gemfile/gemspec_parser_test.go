@@ -29,8 +29,9 @@ func TestGemspecParser(t *testing.T) {
 		t.Errorf("Expected name '%s', got %s", testGemName, gemspec.Name)
 	}
 
-	if gemspec.Version != "1.0.0" {
-		t.Errorf("Expected version '1.0.0', got %s", gemspec.Version)
+	const version100 = "1.0.0"
+	if gemspec.Version != version100 {
+		t.Errorf("Expected version %s, got %s", version100, gemspec.Version)
 	}
 
 	if gemspec.Summary != "A test gem for gemspec parsing" {

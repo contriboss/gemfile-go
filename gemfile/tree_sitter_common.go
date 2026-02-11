@@ -35,6 +35,7 @@ const (
 	nodeMethodCall       = "method_call"
 	nodePair             = "pair"
 	nodeHashKeySymbol    = "hash_key_symbol"
+	endKeyword           = "end"
 )
 
 // Ruby keyword and method name constants
@@ -50,6 +51,9 @@ const (
 	trueValue        = "true"
 	falseValue       = "false"
 	envConstant      = "ENV"
+	pathSource       = "path"
+	gitSource        = "git"
+	rubygemsSource   = "rubygems"
 )
 
 // RubyASTHelper provides common tree-sitter helper methods
