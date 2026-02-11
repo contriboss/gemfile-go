@@ -190,3 +190,77 @@ end
 		}
 	}
 }
+
+func TestEnvTruthiness(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	gemfileContent := `
+# Test ENV["X"] truthy with unset variable (should be false)
+if ENV["UNSET_VAR"]
+  gem "should-not-appear-unset"
+end
+
+# Test ENV["X"] truthy with empty string (should be true)
+if ENV["EMPTY_VAR"]
+  gem "should-appear-empty"
+end
+
+# Test ENV["X"] truthy with set variable (should be true)
+if ENV["SET_VAR"]
+  gem "should-appear-set"
+end
+
+# Test unless ENV["X"] with unset variable (should execute, since unset is falsy)
+unless ENV["UNSET_VAR"]
+  gem "should-appear-unless-unset"
+end
+
+# Test unless ENV["X"] with empty string (should not execute)
+unless ENV["EMPTY_VAR"]
+  gem "should-not-appear-unless-empty"
+end
+`
+	gemfilePath := filepath.Join(tmpDir, "Gemfile")
+	if err := os.WriteFile(gemfilePath, []byte(gemfileContent), 0600); err != nil {
+		t.Fatalf("Failed to write Gemfile: %v", err)
+	}
+
+	// Clear all env vars first
+	os.Unsetenv("UNSET_VAR")
+	os.Unsetenv("EMPTY_VAR")
+	os.Unsetenv("SET_VAR")
+
+	// Set EMPTY_VAR to empty string and SET_VAR to a value
+	os.Setenv("EMPTY_VAR", "")
+	os.Setenv("SET_VAR", "value")
+
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	expectedGems := []string{"should-appear-empty", "should-appear-set", "should-appear-unless-unset"}
+	excludedGems := []string{"should-not-appear-unset", "should-not-appear-unless-empty"}
+
+	for _, expected := range expectedGems {
+		found := false
+		for _, gem := range parsed.Dependencies {
+			if gem.Name == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected gem %s not found", expected)
+		}
+	}
+
+	for _, excluded := range excludedGems {
+		for _, gem := range parsed.Dependencies {
+			if gem.Name == excluded {
+				t.Errorf("Gem %s should have been excluded", excluded)
+			}
+		}
+	}
+}
