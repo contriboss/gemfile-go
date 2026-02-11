@@ -116,3 +116,77 @@ end
 		})
 	}
 }
+
+func TestEnvUnsetVsEmptyString(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	gemfileContent := `
+# Test ENV["X"] == "" with unset variable (should be false)
+if ENV["UNSET_VAR"] == ""
+  gem "should-not-appear-unset-eq"
+end
+
+# Test ENV["X"] == "" with empty string (should be true)
+if ENV["EMPTY_VAR"] == ""
+  gem "should-appear-empty-eq"
+end
+
+# Test ENV["X"] != "" with unset variable (should be true, nil != "")
+if ENV["UNSET_VAR"] != ""
+  gem "should-appear-unset-neq"
+end
+
+# Test ENV["X"] != "" with empty string (should be false)
+if ENV["EMPTY_VAR"] != ""
+  gem "should-not-appear-empty-neq"
+end
+
+# Test ENV["X"] != "" with set variable (should be true)
+if ENV["SET_VAR"] != ""
+  gem "should-appear-set-neq"
+end
+`
+	gemfilePath := filepath.Join(tmpDir, "Gemfile")
+	if err := os.WriteFile(gemfilePath, []byte(gemfileContent), 0600); err != nil {
+		t.Fatalf("Failed to write Gemfile: %v", err)
+	}
+
+	// Clear all env vars first
+	os.Unsetenv("UNSET_VAR")
+	os.Unsetenv("EMPTY_VAR")
+	os.Unsetenv("SET_VAR")
+
+	// Set EMPTY_VAR to empty string and SET_VAR to a value
+	os.Setenv("EMPTY_VAR", "")
+	os.Setenv("SET_VAR", "value")
+
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	expectedGems := []string{"should-appear-empty-eq", "should-appear-unset-neq", "should-appear-set-neq"}
+	excludedGems := []string{"should-not-appear-unset-eq", "should-not-appear-empty-neq"}
+
+	for _, expected := range expectedGems {
+		found := false
+		for _, gem := range parsed.Dependencies {
+			if gem.Name == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected gem %s not found", expected)
+		}
+	}
+
+	for _, excluded := range excludedGems {
+		for _, gem := range parsed.Dependencies {
+			if gem.Name == excluded {
+				t.Errorf("Gem %s should have been excluded", excluded)
+			}
+		}
+	}
+}
