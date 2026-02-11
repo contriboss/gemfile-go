@@ -465,6 +465,12 @@ func (p *GemfileParser) parseGemLine(line string, currentGroups []string, curren
 	// Extract special options (git, path, etc.)
 	dep.Source = p.extractSource(line)
 
+	// If it's a path source and it's relative, we need to make it relative to the Gemfile we're currently parsing
+	if dep.Source != nil && dep.Source.Type == "path" && !filepath.IsAbs(dep.Source.URL) {
+		dir := filepath.Dir(p.filepath)
+		dep.Source.URL = filepath.Clean(filepath.Join(dir, dep.Source.URL))
+	}
+
 	// If no explicit source was found but we're inside a source block, use currentSource
 	if dep.Source == nil && currentSource != nil {
 		// Create a copy of the current source for this gem
@@ -667,6 +673,9 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 
 	// If it's just "gemspec" with no options, return defaults
 	if strings.TrimSpace(line) == gemspecDirective {
+		// If the path is relative (which "." is), make it relative to the current Gemfile
+		dir := filepath.Dir(p.filepath)
+		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
 		return gemspecRef
 	}
 
@@ -675,6 +684,12 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 	p.parseGemspecOption(line, "name", &gemspecRef.Name)
 	p.parseGemspecOption(line, "development_group", &gemspecRef.DevelopmentGroup)
 	p.parseGemspecOption(line, "glob", &gemspecRef.Glob)
+
+	// If the path is relative, make it relative to the current Gemfile
+	if !filepath.IsAbs(gemspecRef.Path) {
+		dir := filepath.Dir(p.filepath)
+		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
+	}
 
 	return gemspecRef
 }

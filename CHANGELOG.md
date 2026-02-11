@@ -6,6 +6,11 @@
 
 * ✨ support `eval_gemfile` macro for modular Gemfiles
 
+### Bug Fixes
+
+* fix relative path resolution for `eval_gemfile` to match Bundler behavior
+* ensure `gemspec` and `path:` sources are resolved relative to the Gemfile they are defined in
+
 ## [0.10.0](https://github.com/contriboss/gemfile-go/compare/v0.9.0...v0.10.0) (2026-02-08)
 
 ### Features

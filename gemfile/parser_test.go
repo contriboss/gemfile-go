@@ -303,8 +303,9 @@ gem 'redis', :source => 'https://gems.example.com'
 		t.Fatal("Expected gemspec to be parsed")
 	}
 	gs := parsed.Gemspecs[0]
-	if gs.Path != "./" {
-		t.Errorf("Expected gemspec path './', got %s", gs.Path)
+	expectedGemspecPath := filepath.Clean(tmpDir)
+	if gs.Path != expectedGemspecPath {
+		t.Errorf("Expected gemspec path '%s', got %s", expectedGemspecPath, gs.Path)
 	}
 	if gs.Name != "my-gem" {
 		t.Errorf("Expected gemspec name 'my-gem', got %s", gs.Name)
@@ -346,7 +347,7 @@ gem 'redis', :source => 'https://gems.example.com'
 		},
 		"sqlite3": {
 			sourceType: "path",
-			sourceURL:  "vendor/sqlite3",
+			sourceURL:  filepath.Clean(filepath.Join(tmpDir, "vendor/sqlite3")),
 		},
 		"redis": {
 			sourceType: "rubygems",
