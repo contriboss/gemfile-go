@@ -101,7 +101,8 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 	// (gemspec integration needs more work)
 	useTreeSitter := tsErr == nil &&
 		(len(gemfile.Dependencies) > 0 || gemfile.RubyVersion != "") &&
-		len(gemfile.Gemspecs) == 0
+		len(gemfile.Gemspecs) == 0 &&
+		!strings.Contains(p.content, "eval_gemfile")
 
 	if useTreeSitter {
 		return gemfile, nil
@@ -245,7 +246,7 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 		expandedLine := p.expandVariables(line, variables)
 
 		// Parse different types of lines
-		if err := p.parseLine(expandedLine, &currentGroups, &currentSource, &blockDepth, result); err != nil {
+		if err := p.parseLine(expandedLine, &currentGroups, &currentSource, &blockDepth, result, variables); err != nil {
 			return nil, fmt.Errorf("line %d: %w", lineNum, err)
 		}
 	}
@@ -288,8 +289,14 @@ func (p *GemfileParser) parseLine(
 	currentSource **Source,
 	blockDepth *int,
 	result *ParsedGemfile,
+	variables map[string]string,
 ) error {
 	line = strings.TrimSpace(line)
+
+	// Parse eval_gemfile
+	if strings.HasPrefix(line, "eval_gemfile") {
+		return p.handleEvalGemfile(line, currentGroups, currentSource, blockDepth, result, variables)
+	}
 
 	// Parse source declarations
 	if strings.HasPrefix(line, "source ") {
@@ -803,5 +810,80 @@ func (p *GemfileParser) handleGemspecDirective(line string, result *ParsedGemfil
 		}
 		result.Dependencies = append(result.Dependencies, deps...)
 	}
+	return nil
+}
+
+// handleEvalGemfile handles the eval_gemfile macro
+func (p *GemfileParser) handleEvalGemfile(
+	line string,
+	currentGroups *[]string,
+	currentSource **Source,
+	blockDepth *int,
+	result *ParsedGemfile,
+	variables map[string]string,
+) error {
+	re := regexp.MustCompile(`eval_gemfile\s*\(?\s*['"]([^'"]+)['"]\s*\)?`)
+	matches := re.FindStringSubmatch(line)
+	if len(matches) < 2 {
+		return fmt.Errorf("invalid eval_gemfile line: %s", line)
+	}
+
+	includePath := matches[1]
+	if !filepath.IsAbs(includePath) {
+		dir := filepath.Dir(p.filepath)
+		includePath = filepath.Join(dir, includePath)
+	}
+
+	content, err := os.ReadFile(includePath)
+	if err != nil {
+		return fmt.Errorf("failed to read included Gemfile %s: %w", includePath, err)
+	}
+
+	// Save current state
+	oldFilepath := p.filepath
+	oldContent := p.content
+
+	// Update state for recursive parsing
+	p.filepath = includePath
+	p.content = string(content)
+
+	// Parse the included content
+	scanner := bufio.NewScanner(strings.NewReader(p.content))
+	lineNum := 0
+	condHandler := newConditionalHandler(p)
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		if handled, skip := condHandler.handleLine(line); handled && skip {
+			continue
+		}
+
+		if !condHandler.shouldProcess() {
+			condHandler.handleInactiveLine(line)
+			continue
+		}
+
+		if varName, varValue := p.parseVariable(line); varName != "" {
+			variables[varName] = varValue
+			continue
+		}
+
+		expandedLine := p.expandVariables(line, variables)
+
+		if err := p.parseLine(expandedLine, currentGroups, currentSource, blockDepth, result, variables); err != nil {
+			return fmt.Errorf("in %s line %d: %w", includePath, lineNum, err)
+		}
+	}
+
+	// Restore state
+	p.filepath = oldFilepath
+	p.content = oldContent
+
 	return nil
 }
