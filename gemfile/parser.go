@@ -103,7 +103,7 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 
 	// Try tree-sitter first (handles complex Ruby constructs like nested blocks)
 	// Note: Currently experimental - falls back to regex for edge cases
-	tsParser := NewTreeSitterGemfileParser([]byte(p.content))
+	tsParser := NewTreeSitterGemfileParser([]byte(p.content), p.filepath)
 	gemfile, tsErr := tsParser.ParseWithTreeSitter()
 
 	// Use tree-sitter result if it found content AND no gemspec directives
@@ -152,7 +152,7 @@ func (h *conditionalHandler) shouldProcess() bool {
 }
 
 // handleLine processes conditional keywords, returns true if the line was a conditional keyword
-func (h *conditionalHandler) handleLine(line string) (handled, skipLine bool) {
+func (h *conditionalHandler) handleLine(line string) (handled, skipLine bool, err error) {
 	if strings.HasPrefix(line, "if ") {
 		return h.handleIf(line)
 	}
@@ -163,73 +163,82 @@ func (h *conditionalHandler) handleLine(line string) (handled, skipLine bool) {
 		return h.handleElsif(line)
 	}
 	if line == "else" && len(h.stack) > 0 {
-		return h.handleElse()
+		return h.handleElse(), true, nil
 	}
 	if line == endKeyword && len(h.stack) > 0 {
-		return h.handleEnd()
+		return h.handleEnd(), true, nil
 	}
 	// Track nested blocks within conditionals
 	if len(h.stack) > 0 && (strings.HasSuffix(line, " do") || strings.HasSuffix(line, " do |")) {
 		h.stack[len(h.stack)-1].depth++
 	}
-	return false, false
+	return false, false, nil
 }
 
-func (h *conditionalHandler) handleIf(line string) (handled, skipLine bool) {
+func (h *conditionalHandler) handleIf(line string) (handled, skipLine bool, err error) {
 	condition := strings.TrimPrefix(line, "if ")
-	isTrue := h.parser.evaluateCondition(condition)
+	isTrue, err := h.parser.evaluateCondition(condition)
+	if err != nil {
+		return false, false, err
+	}
 	h.stack = append(h.stack, conditionalState{
 		inConditional: true,
 		branchActive:  isTrue,
 		conditionMet:  isTrue,
 		depth:         1,
 	})
-	return true, true
+	return true, true, nil
 }
 
-func (h *conditionalHandler) handleUnless(line string) (handled, skipLine bool) {
+func (h *conditionalHandler) handleUnless(line string) (handled, skipLine bool, err error) {
 	condition := strings.TrimPrefix(line, "unless ")
-	isTrue := !h.parser.evaluateCondition(condition)
+	isTrue, err := h.parser.evaluateCondition(condition)
+	if err != nil {
+		return false, false, err
+	}
 	h.stack = append(h.stack, conditionalState{
 		inConditional: true,
-		branchActive:  isTrue,
-		conditionMet:  isTrue,
+		branchActive:  !isTrue,
+		conditionMet:  !isTrue,
 		depth:         1,
 	})
-	return true, true
+	return true, true, nil
 }
 
-func (h *conditionalHandler) handleElsif(line string) (handled, skipLine bool) {
+func (h *conditionalHandler) handleElsif(line string) (handled, skipLine bool, err error) {
 	cs := &h.stack[len(h.stack)-1]
 	if cs.conditionMet {
 		cs.branchActive = false
 	} else {
 		condition := strings.TrimPrefix(line, "elsif ")
-		isTrue := h.parser.evaluateCondition(condition)
+		isTrue, err := h.parser.evaluateCondition(condition)
+		if err != nil {
+			return false, false, err
+		}
 		cs.branchActive = isTrue
 		if isTrue {
 			cs.conditionMet = true
 		}
 	}
-	return true, true
+	return true, true, nil
 }
 
-func (h *conditionalHandler) handleElse() (handled, skipLine bool) {
+func (h *conditionalHandler) handleElse() bool {
 	cs := &h.stack[len(h.stack)-1]
 	cs.branchActive = !cs.conditionMet
-	return true, true
+	return true
 }
 
-func (h *conditionalHandler) handleEnd() (handled, skipLine bool) {
+func (h *conditionalHandler) handleEnd() bool {
 	cs := &h.stack[len(h.stack)-1]
 	if cs.depth > 0 {
 		cs.depth--
 		if cs.depth == 0 {
 			h.stack = h.stack[:len(h.stack)-1]
-			return true, true
+			return true
 		}
 	}
-	return false, false
+	return false
 }
 
 // handleInactiveLine handles end keywords in inactive branches
@@ -268,7 +277,9 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 		}
 
 		// Handle if/elsif/else/end
-		if handled, skip := condHandler.handleLine(line); handled && skip {
+		if handled, skip, err := condHandler.handleLine(line); err != nil {
+			return nil, fmt.Errorf("line %d: %w", lineNum, err)
+		} else if handled && skip {
 			continue
 		}
 
@@ -297,45 +308,44 @@ func (p *GemfileParser) parseContent() (*ParsedGemfile, error) {
 }
 
 // evaluateCondition evaluates simple Ruby conditions (ENV comparisons)
-// Returns true if condition is met, and false otherwise.
-// If the condition is unsupported (e.g. RUBY_VERSION), it prints a warning/error and returns false.
-func (p *GemfileParser) evaluateCondition(condition string) bool {
+// Returns true if condition is met, false otherwise, and an error if the condition is unsupported.
+// If the condition contains RUBY_VERSION or RUBY_ENGINE, it returns an error as these are not supported.
+func (p *GemfileParser) evaluateCondition(condition string) (bool, error) {
 	condition = strings.TrimSpace(condition)
 
 	// Handle ENV.fetch("VAR", "default").casecmp?("value")
 	if result, handled := p.evaluateEnvFetchCasecmp(condition); handled {
-		return result
+		return result, nil
 	}
 
 	// Handle ENV.fetch("VAR", "default") == "value"
 	if result, handled := p.evaluateEnvFetchEq(condition); handled {
-		return result
+		return result, nil
 	}
 
 	// Handle ENV["VAR"] == "value"
 	if result, handled := p.evaluateEnvEq(condition); handled {
-		return result
+		return result, nil
 	}
 
 	// Handle ENV["VAR"] != "value"
 	if result, handled := p.evaluateEnvNeq(condition); handled {
-		return result
+		return result, nil
 	}
 
 	// Handle ENV["VAR"] (truthy check)
 	if result, handled := p.evaluateEnvTruthy(condition); handled {
-		return result
+		return result, nil
 	}
 
-	// Handle RUBY_VERSION or RUBY_ENGINE - these are not supported and should raise an error/warning
+	// Handle RUBY_VERSION or RUBY_ENGINE - these are not supported and should raise an error
 	if strings.Contains(condition, "RUBY_VERSION") || strings.Contains(condition, "RUBY_ENGINE") {
-		fmt.Printf("Error: Unsupported Ruby logic detected: %s. Please use Bundler to install.\n", condition)
-		return false
+		return false, fmt.Errorf("unsupported Ruby logic detected: %s. Please use Bundler to install", condition)
 	}
 
 	// Unknown condition - default to true (include all gems) but print warning
 	fmt.Printf("Warning: Unknown or complex Ruby logic detected: %s. Defaulting to true.\n", condition)
-	return true
+	return true, nil
 }
 
 func (p *GemfileParser) evaluateEnvFetchCasecmp(condition string) (result, handled bool) {
@@ -350,14 +360,14 @@ func (p *GemfileParser) evaluateEnvFetchCasecmp(condition string) (result, handl
 	targetValue := matches[3]
 
 	const defaultValueLabel = "default value"
-	envVal := os.Getenv(envVarName)
+	envVal, ok := os.LookupEnv(envVarName)
 	evalSource := envConstant
-	if envVal == "" {
+	if !ok {
 		envVal = defaultValue
 		evalSource = defaultValueLabel
 	}
 	result = strings.EqualFold(envVal, targetValue)
-	fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) casecmp? %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] using %s -> %v\n", envVarName, evalSource, result)
 	return result, true
 }
 
@@ -372,14 +382,14 @@ func (p *GemfileParser) evaluateEnvFetchEq(condition string) (result, handled bo
 	targetValue := matches[3]
 
 	const defaultValueLabel = "default value"
-	envVal := os.Getenv(envVarName)
+	envVal, ok := os.LookupEnv(envVarName)
 	evalSource := envConstant
-	if envVal == "" {
+	if !ok {
 		envVal = defaultValue
 		evalSource = defaultValueLabel
 	}
 	result = envVal == targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) == %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] using %s -> %v\n", envVarName, evalSource, result)
 	return result, true
 }
 
@@ -391,9 +401,15 @@ func (p *GemfileParser) evaluateEnvEq(condition string) (result, handled bool) {
 	}
 	envVarName := matches[1]
 	targetValue := matches[2]
-	envVal := os.Getenv(envVarName)
-	result = envVal == targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) == %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	envVal, envSet := os.LookupEnv(envVarName)
+	// In Ruby, ENV["X"] returns nil when unset, so ENV["X"] == "" is false when X is unset
+	if !envSet {
+		result = false
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] (unset) -> %v\n", envVarName, result)
+	} else {
+		result = envVal == targetValue
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
+	}
 	return result, true
 }
 
@@ -405,9 +421,15 @@ func (p *GemfileParser) evaluateEnvNeq(condition string) (result, handled bool) 
 	}
 	envVarName := matches[1]
 	targetValue := matches[2]
-	envVal := os.Getenv(envVarName)
-	result = envVal != targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) != %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+	envVal, envSet := os.LookupEnv(envVarName)
+	// In Ruby, ENV["X"] returns nil when unset, so ENV["X"] != "" is true when X is unset
+	if !envSet {
+		result = true
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] (unset) -> %v\n", envVarName, result)
+	} else {
+		result = envVal != targetValue
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
+	}
 	return result, true
 }
 
@@ -418,9 +440,14 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 		return false, false
 	}
 	envVarName := matches[1]
-	envVal, ok := os.LookupEnv(envVarName)
-	result = ok
-	fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
+	_, ok := os.LookupEnv(envVarName)
+	if !ok {
+		result = false
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] (unset) -> %v\n", envVarName, result)
+	} else {
+		result = true
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
+	}
 	return result, true
 }
 
@@ -815,9 +842,6 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 
 	// If it's just "gemspec" with no options, return defaults
 	if strings.TrimSpace(line) == gemspecDirective {
-		// If the path is relative (which "." is), make it relative to the current Gemfile
-		dir := filepath.Dir(p.filepath)
-		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
 		return gemspecRef
 	}
 
@@ -826,12 +850,6 @@ func (p *GemfileParser) parseGemspecDirective(line string) *GemspecReference {
 	p.parseGemspecOption(line, "name", &gemspecRef.Name)
 	p.parseGemspecOption(line, "development_group", &gemspecRef.DevelopmentGroup)
 	p.parseGemspecOption(line, "glob", &gemspecRef.Glob)
-
-	// If the path is relative, make it relative to the current Gemfile
-	if !filepath.IsAbs(gemspecRef.Path) {
-		dir := filepath.Dir(p.filepath)
-		gemspecRef.Path = filepath.Clean(filepath.Join(dir, gemspecRef.Path))
-	}
 
 	return gemspecRef
 }
@@ -902,7 +920,7 @@ func (p *GemfileParser) expandEnvFetch(line string) string {
 		}
 
 		// Look up environment variable
-		if value := os.Getenv(envVarName); value != "" {
+		if value, ok := os.LookupEnv(envVarName); ok {
 			return fmt.Sprintf("'%s'", value)
 		}
 
@@ -1017,7 +1035,9 @@ func (p *GemfileParser) handleEvalGemfile(
 			continue
 		}
 
-		if handled, skip := condHandler.handleLine(line); handled && skip {
+		if handled, skip, err := condHandler.handleLine(line); err != nil {
+			return fmt.Errorf("in %s line %d: %w", includePath, lineNum, err)
+		} else if handled && skip {
 			continue
 		}
 
