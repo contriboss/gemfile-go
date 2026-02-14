@@ -4,6 +4,7 @@ package gemfile
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -12,6 +13,7 @@ import (
 // TreeSitterGemfileParser handles parsing of Gemfile using tree-sitter
 type TreeSitterGemfileParser struct {
 	content      []byte
+	filepath     string // Path to the Gemfile being parsed
 	helper       *RubyASTHelper
 	contextStack *parserContextStack
 	variables    map[string]string // Track variable assignments
@@ -35,7 +37,7 @@ type parserContextStack struct {
 func newParserContextStack() *parserContextStack {
 	return &parserContextStack{
 		current: &parserContext{
-			groups: []string{"default"},
+			groups: []string{defaultGroup},
 		},
 	}
 }
@@ -69,9 +71,18 @@ func (s *parserContextStack) pop() {
 }
 
 // NewTreeSitterGemfileParser creates a new tree-sitter based Gemfile parser
-func NewTreeSitterGemfileParser(content []byte) *TreeSitterGemfileParser {
+// The optional filePath parameter is used to resolve relative path: sources to absolute paths.
+// If not provided, defaults to empty string (no path resolution).
+// For backwards compatibility, this function accepts 0 or 1 filePath arguments.
+// Only the first filePath argument is used; additional arguments are ignored.
+func NewTreeSitterGemfileParser(content []byte, filePath ...string) *TreeSitterGemfileParser {
+	path := ""
+	if len(filePath) > 0 {
+		path = filePath[0]
+	}
 	return &TreeSitterGemfileParser{
 		content:      content,
+		filepath:     path,
 		helper:       NewRubyASTHelper(content),
 		contextStack: newParserContextStack(),
 		variables:    make(map[string]string),
@@ -534,31 +545,36 @@ func (p *TreeSitterGemfileParser) applyGemOption(key, value string, dep *GemDepe
 		} else {
 			dep.Source.URL = value
 		}
-	case "path":
+	case pathSource:
 		// Always create a new source for explicit path options
-		dep.Source = &Source{Type: "path"}
+		dep.Source = &Source{Type: pathSource}
 		dep.Source.URL = value
+		// Normalize relative paths to be relative to the Gemfile directory
+		if p.filepath != "" && !filepath.IsAbs(value) {
+			dir := filepath.Dir(p.filepath)
+			dep.Source.URL = filepath.Clean(filepath.Join(dir, value))
+		}
 	case sourceKey:
 		// Always create a new rubygems source for explicit source options
 		if value != "" {
-			dep.Source = &Source{Type: "rubygems", URL: value}
+			dep.Source = &Source{Type: rubygemsSource, URL: value}
 		}
 	case "branch":
 		// Create new git source if nil or not git (to avoid mutating context source)
-		if dep.Source == nil || dep.Source.Type != gitKey {
-			dep.Source = &Source{Type: gitKey}
+		if dep.Source == nil || dep.Source.Type != gitSource {
+			dep.Source = &Source{Type: gitSource}
 		}
 		dep.Source.Branch = value
 	case "tag":
 		// Create new git source if nil or not git (to avoid mutating context source)
-		if dep.Source == nil || dep.Source.Type != gitKey {
-			dep.Source = &Source{Type: gitKey}
+		if dep.Source == nil || dep.Source.Type != gitSource {
+			dep.Source = &Source{Type: gitSource}
 		}
 		dep.Source.Tag = value
 	case "ref":
 		// Create new git source if nil or not git (to avoid mutating context source)
-		if dep.Source == nil || dep.Source.Type != gitKey {
-			dep.Source = &Source{Type: gitKey}
+		if dep.Source == nil || dep.Source.Type != gitSource {
+			dep.Source = &Source{Type: gitSource}
 		}
 		dep.Source.Ref = value
 	}
@@ -687,7 +703,7 @@ func (p *TreeSitterGemfileParser) evaluateEnvCall(node *tree_sitter.Node) string
 		return ""
 	}
 
-	if value := lookupEnv(envVarName); value != "" {
+	if value, ok := os.LookupEnv(envVarName); ok {
 		return value
 	}
 	return defaultValue

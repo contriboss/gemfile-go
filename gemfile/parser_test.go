@@ -202,7 +202,7 @@ func TestInlineSourceOption(t *testing.T) {
 	})
 
 	t.Run("tree-sitter parser", func(t *testing.T) {
-		parser := NewTreeSitterGemfileParser([]byte(gemfileContent))
+		parser := NewTreeSitterGemfileParser([]byte(gemfileContent), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -261,7 +261,7 @@ gem 'outside_block'
 	})
 
 	t.Run("tree-sitter parser", func(t *testing.T) {
-		parser := NewTreeSitterGemfileParser([]byte(gemfileContent))
+		parser := NewTreeSitterGemfileParser([]byte(gemfileContent), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -303,6 +303,7 @@ gem 'redis', :source => 'https://gems.example.com'
 		t.Fatal("Expected gemspec to be parsed")
 	}
 	gs := parsed.Gemspecs[0]
+	// Path should be the raw path from the Gemfile, not resolved
 	if gs.Path != "./" {
 		t.Errorf("Expected gemspec path './', got %s", gs.Path)
 	}
@@ -345,8 +346,8 @@ gem 'redis', :source => 'https://gems.example.com'
 			branch:     "master",
 		},
 		"sqlite3": {
-			sourceType: "path",
-			sourceURL:  "vendor/sqlite3",
+			sourceType: pathSource,
+			sourceURL:  filepath.Clean(filepath.Join(tmpDir, "vendor", "sqlite3")),
 		},
 		"redis": {
 			sourceType: "rubygems",
@@ -821,7 +822,7 @@ gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
 		// Make sure env var is not set
 		os.Unsetenv("RAILS_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -843,7 +844,7 @@ gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
 		os.Setenv("RAILS_VERSION", "~> 7.1.0")
 		defer os.Unsetenv("RAILS_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -860,6 +861,30 @@ gem 'railties', ENV.fetch("RAILS_VERSION", "~> 8.1.0")
 			t.Errorf("expected constraint '~> 7.1.0', got %v", as.Constraints)
 		}
 	})
+
+	t.Run("ENV.fetch with empty string env var", func(t *testing.T) {
+		// Set env var to empty string
+		os.Setenv("RAILS_VERSION", "")
+		defer os.Unsetenv("RAILS_VERSION")
+
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parsed, err := parser.ParseWithTreeSitter()
+		if err != nil {
+			t.Fatalf("ParseWithTreeSitter failed: %v", err)
+		}
+
+		// Find activesupport gem
+		as := findGem(parsed.Dependencies, "activesupport")
+		if as == nil {
+			t.Fatal("expected activesupport gem to be parsed")
+		}
+
+		// Should use empty string from env var, NOT the default value
+		// Ruby: ENV.fetch("X", "default") returns "" when ENV["X"] == ""
+		if len(as.Constraints) != 0 {
+			t.Errorf("expected no constraints (empty string), got %v", as.Constraints)
+		}
+	})
 }
 
 func TestEnvElementReferenceSupport(t *testing.T) {
@@ -873,7 +898,7 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 		os.Setenv("MY_GEM_VERSION", "~> 2.0")
 		defer os.Unsetenv("MY_GEM_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -892,7 +917,7 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 	t.Run("ENV[] with env var not set", func(t *testing.T) {
 		os.Unsetenv("MY_GEM_VERSION")
 
-		parser := NewTreeSitterGemfileParser([]byte(testGemfile))
+		parser := NewTreeSitterGemfileParser([]byte(testGemfile), "")
 		parsed, err := parser.ParseWithTreeSitter()
 		if err != nil {
 			t.Fatalf("ParseWithTreeSitter failed: %v", err)
@@ -908,4 +933,175 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 			t.Errorf("expected no constraints when env not set, got %v", gem.Constraints)
 		}
 	})
+}
+
+func TestContainsConditionalKeywords(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name:     "actual if statement",
+			content:  "if ENV['TEST']\n  gem 'test'\nend",
+			expected: true,
+		},
+		{
+			name:     "actual unless statement",
+			content:  "unless ENV['SKIP']\n  gem 'test'\nend",
+			expected: true,
+		},
+		{
+			name:     "if with leading whitespace",
+			content:  "  if RUBY_VERSION > '3.0'\n    gem 'modern'\n  end",
+			expected: true,
+		},
+		{
+			name:     "if in comment should not match",
+			content:  "# if you need this gem\ngem 'test'",
+			expected: false,
+		},
+		{
+			name:     "if in string should not match",
+			content:  "gem 'test', description: 'if you need it'",
+			expected: false,
+		},
+		{
+			name:     "unless in string should not match",
+			content:  "gem 'test', note: 'unless specified otherwise'",
+			expected: false,
+		},
+		{
+			name:     "elsif keyword",
+			content:  "if ENV['A']\n  gem 'a'\nelsif ENV['B']\n  gem 'b'\nend",
+			expected: true,
+		},
+		{
+			name:     "word containing if but not keyword",
+			content:  "gem 'unify'",
+			expected: false,
+		},
+		{
+			name:     "no conditionals",
+			content:  "source 'https://rubygems.org'\ngem 'rails'",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := containsConditionalKeywords(tt.content)
+			if result != tt.expected {
+				t.Errorf("containsConditionalKeywords() = %v, expected %v for content:\n%s", result, tt.expected, tt.content)
+			}
+		})
+	}
+}
+
+// TestPathNormalizationConsistency verifies that both tree-sitter and regex parsers
+// normalize relative path sources consistently
+func TestPathNormalizationConsistency(t *testing.T) {
+	gemfileContent := `source 'https://rubygems.org'
+
+gem 'local_gem', path: '../vendor/local_gem'
+gem 'another_gem', path: './relative/path'
+`
+
+	// Create a temporary directory structure
+	tmpDir := t.TempDir()
+	gemfilePath := filepath.Join(tmpDir, "Gemfile")
+	errWrite := os.WriteFile(gemfilePath, []byte(gemfileContent), 0600)
+	if errWrite != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", errWrite)
+	}
+
+	// Parse with the main parser (will use tree-sitter if conditions are met)
+	parser := NewGemfileParser(gemfilePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile: %v", err)
+	}
+
+	// Also parse with tree-sitter explicitly
+	tsParser := NewTreeSitterGemfileParser([]byte(gemfileContent), gemfilePath)
+	tsParsed, err := tsParser.ParseWithTreeSitter()
+	if err != nil {
+		t.Fatalf("Tree-sitter parse failed: %v", err)
+	}
+
+	// Verify we have the expected gems
+	if len(parsed.Dependencies) != 2 {
+		t.Fatalf("Expected 2 dependencies, got %d", len(parsed.Dependencies))
+	}
+
+	if len(tsParsed.Dependencies) != 2 {
+		t.Fatalf("Tree-sitter: Expected 2 dependencies, got %d", len(tsParsed.Dependencies))
+	}
+
+	// Check that paths are normalized (absolute)
+	for _, dep := range parsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Expected source for gem %s", dep.Name)
+			continue
+		}
+		if dep.Source.Type != pathSource {
+			t.Errorf("Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
+			continue
+		}
+		if !filepath.IsAbs(dep.Source.URL) {
+			t.Errorf("Expected absolute path for gem %s, got %s", dep.Name, dep.Source.URL)
+		}
+	}
+
+	// Check tree-sitter results
+	for _, dep := range tsParsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Tree-sitter: Expected source for gem %s", dep.Name)
+			continue
+		}
+		if dep.Source.Type != pathSource {
+			t.Errorf("Tree-sitter: Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
+			continue
+		}
+		if !filepath.IsAbs(dep.Source.URL) {
+			t.Errorf("Tree-sitter: Expected absolute path for gem %s, got %s", dep.Name, dep.Source.URL)
+		}
+	}
+
+	// Verify both parsers produce the same paths (order-independent)
+	regexDepsByName := make(map[string]string, len(parsed.Dependencies))
+	for _, dep := range parsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Missing source for gem %s in regex parser results", dep.Name)
+			continue
+		}
+		regexDepsByName[dep.Name] = dep.Source.URL
+	}
+
+	tsDepsByName := make(map[string]string, len(tsParsed.Dependencies))
+	for _, dep := range tsParsed.Dependencies {
+		if dep.Source == nil {
+			t.Errorf("Missing source for gem %s in tree-sitter results", dep.Name)
+			continue
+		}
+		tsDepsByName[dep.Name] = dep.Source.URL
+	}
+
+	for name, regexURL := range regexDepsByName {
+		tsURL, ok := tsDepsByName[name]
+		if !ok {
+			t.Errorf("Tree-sitter: missing gem %s present in regex parser results", name)
+			continue
+		}
+		if regexURL != tsURL {
+			t.Errorf("Path mismatch for gem %s: regex=%s, tree-sitter=%s",
+				name, regexURL, tsURL)
+		}
+	}
+
+	for name := range tsDepsByName {
+		if _, ok := regexDepsByName[name]; !ok {
+			t.Errorf("Regex parser: missing gem %s present in tree-sitter results", name)
+		}
+	}
 }

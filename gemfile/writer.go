@@ -8,11 +8,8 @@ import (
 )
 
 const (
-	endKeyword     = "end"
-	rubygemsSource = "rubygems"
-	rubygemsURL    = "https://rubygems.org"
-	pathSource     = "path"
-	defaultGroup   = "default"
+	rubygemsURL  = "https://rubygems.org"
+	defaultGroup = "default"
 )
 
 // GemfileWriter handles writing and modifying Gemfiles

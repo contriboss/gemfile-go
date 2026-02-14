@@ -202,6 +202,7 @@ gemspec path: "gems", name: "custom_gem", development_group: :test
 			t.Errorf("Expected 1 gemspec, got %d", len(parsed.Gemspecs))
 		} else {
 			gemspecRef := parsed.Gemspecs[0]
+			// Path should be the raw path from the Gemfile: "gems"
 			if gemspecRef.Path != "gems" {
 				t.Errorf("Expected path 'gems', got %s", gemspecRef.Path)
 			}

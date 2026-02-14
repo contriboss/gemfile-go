@@ -1,6 +1,7 @@
 package gemfile
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -11,8 +12,10 @@ const (
 	testGemName      = "test_gem"
 	testGemHomepage  = "https://github.com/example/test_gem"
 	testGemRack      = "rack"
+	testGemPuma      = "puma"
 	testDevelopment  = "development"
 	testConstraint20 = "~> 2.0"
+	nilStr           = "nil"
 )
 
 func TestGemspecParser(t *testing.T) {
@@ -29,8 +32,9 @@ func TestGemspecParser(t *testing.T) {
 		t.Errorf("Expected name '%s', got %s", testGemName, gemspec.Name)
 	}
 
-	if gemspec.Version != "1.0.0" {
-		t.Errorf("Expected version '1.0.0', got %s", gemspec.Version)
+	const version100 = "1.0.0"
+	if gemspec.Version != version100 {
+		t.Errorf("Expected version %s, got %s", version100, gemspec.Version)
 	}
 
 	if gemspec.Summary != "A test gem for gemspec parsing" {
@@ -221,7 +225,7 @@ func TestFindGemspecs(t *testing.T) {
 			basePath:      testDataPath,
 			glob:          "",
 			nameFilter:    "",
-			expectedCount: 3, // test_gem.gemspec, another_gem.gemspec, exotic.gemspec
+			expectedCount: 4, // test_gem.gemspec, another_gem.gemspec, exotic.gemspec, gemspec_relative_test/test_relative.gemspec
 			shouldError:   false,
 		},
 		{
@@ -346,7 +350,7 @@ func TestLoadGemspecDependencies(t *testing.T) {
 	// Check that runtime dependencies are included
 	var foundRack bool
 	for _, dep := range deps {
-		if dep.Name == "rack" {
+		if dep.Name == testGemRack {
 			foundRack = true
 			if len(dep.Groups) != 1 || dep.Groups[0] != "default" {
 				t.Errorf("Expected rack to be in default group, got %v", dep.Groups)
@@ -387,6 +391,7 @@ func TestGemfileWithGemspecDirective(t *testing.T) {
 	}
 
 	// The gemspec directive should have default values
+	// Default path is "." (not resolved)
 	if parsed.Gemspecs[0].Path != "." {
 		t.Errorf("Expected default path '.', got %s", parsed.Gemspecs[0].Path)
 	}
@@ -397,7 +402,7 @@ func TestGemfileWithGemspecDirective(t *testing.T) {
 	// Check that other gems are also parsed
 	var foundPuma bool
 	for _, dep := range parsed.Dependencies {
-		if dep.Name == "puma" {
+		if dep.Name == testGemPuma {
 			foundPuma = true
 			if len(dep.Constraints) != 1 || dep.Constraints[0] != "~> 5.6" {
 				t.Errorf("Expected puma version '~> 5.6', got %v", dep.Constraints)
@@ -411,5 +416,115 @@ func TestGemfileWithGemspecDirective(t *testing.T) {
 	// Check ruby version
 	if parsed.RubyVersion != "3.0.0" {
 		t.Errorf("Expected ruby version '3.0.0', got %s", parsed.RubyVersion)
+	}
+}
+
+func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
+	// Regression test for double-joining bug:
+	// When parsing a Gemfile via a relative path like "testdata/subdir/Gemfile",
+	// ensure LoadGemspecDependencies doesn't incorrectly search in "testdata/subdir/testdata/subdir"
+
+	// Build path relative to current test directory (gemfile/)
+	// This works regardless of where the tests are run from
+	testGemfilePath, err := filepath.Abs("../testdata/gemspec_relative_test/Gemfile")
+	if err != nil {
+		t.Fatalf("Failed to get absolute path: %v", err)
+	}
+
+	// Make it relative to current directory for the test
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get working directory: %v", err)
+	}
+	relativePath, err := filepath.Rel(cwd, testGemfilePath)
+	if err != nil {
+		t.Fatalf("Failed to make relative path: %v", err)
+	}
+
+	// Verify the file exists before parsing
+	if _, errStat := os.Stat(relativePath); os.IsNotExist(errStat) {
+		t.Skipf("Test file not found at %s, skipping test", relativePath)
+	}
+
+	parser := NewGemfileParser(relativePath)
+	parsed, err := parser.Parse()
+	if err != nil {
+		t.Fatalf("Failed to parse Gemfile with relative path: %v", err)
+	}
+
+	// Verify gemspec was found
+	if len(parsed.Gemspecs) != 1 {
+		t.Errorf("Expected 1 gemspec reference, got %d", len(parsed.Gemspecs))
+	}
+
+	// Verify gemspec path is stored as raw value
+	if parsed.Gemspecs[0].Path != "." {
+		t.Errorf("Expected gemspec path to be '.', got %s", parsed.Gemspecs[0].Path)
+	}
+
+	// The key test: dependencies should be loaded from the correct location
+	// With our fix, LoadGemspecDependencies should correctly resolve:
+	//   gemfileDir = filepath.Dir(relativePath)
+	//   gemspecRef.Path = "." (raw path from Gemfile)
+	//   searchPath = filepath.Join(gemfileDir, ".") = gemfileDir ✓
+
+	// Verify the gem itself was loaded
+	var foundTestRelative bool
+	var testRelativePath string
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == "test_relative" {
+			foundTestRelative = true
+			// Verify it's a path dependency
+			if dep.Source == nil || dep.Source.Type != pathSource {
+				t.Errorf("Expected test_relative to be a path dependency, got %v", dep.Source)
+			}
+			if dep.Source != nil {
+				testRelativePath = filepath.Clean(dep.Source.URL)
+				// The canonical path should not have repeated directory components
+				// Get the expected path (directory where the gemspec is)
+				expectedPath := filepath.Clean(filepath.Dir(relativePath))
+				if testRelativePath != expectedPath {
+					t.Errorf("Expected path %s, got %s", expectedPath, testRelativePath)
+				}
+				t.Logf("test_relative source path (correct): %s", testRelativePath)
+			}
+			break
+		}
+	}
+	if !foundTestRelative {
+		// Log all dependencies for debugging
+		t.Logf("Total dependencies found: %d", len(parsed.Dependencies))
+		for i, dep := range parsed.Dependencies {
+			srcInfo := nilStr
+			if dep.Source != nil {
+				srcInfo = dep.Source.URL
+			}
+			t.Logf("  Dependency %d: %s (source: %s)", i, dep.Name, srcInfo)
+		}
+		t.Error("Expected to find 'test_relative' in dependencies loaded from gemspec (fix may not be working)")
+	}
+
+	// Verify runtime dependencies from the gemspec were also loaded
+	var foundRack bool
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == testGemRack {
+			foundRack = true
+			break
+		}
+	}
+	if !foundRack {
+		t.Error("Expected to find 'rack' (runtime dependency from gemspec)")
+	}
+
+	// Also verify that gems directly in the Gemfile are still parsed
+	var foundPuma bool
+	for _, dep := range parsed.Dependencies {
+		if dep.Name == testGemPuma {
+			foundPuma = true
+			break
+		}
+	}
+	if !foundPuma {
+		t.Error("Expected to find 'puma' (gem directly in Gemfile)")
 	}
 }
