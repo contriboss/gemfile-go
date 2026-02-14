@@ -995,7 +995,7 @@ func TestContainsConditionalKeywords(t *testing.T) {
 				t.Errorf("containsConditionalKeywords() = %v, expected %v for content:\n%s", result, tt.expected, tt.content)
 			}
 		})
-  }
+	}
 }
 
 // TestPathNormalizationConsistency verifies that both tree-sitter and regex parsers
