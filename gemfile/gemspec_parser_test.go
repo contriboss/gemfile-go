@@ -12,8 +12,10 @@ const (
 	testGemName      = "test_gem"
 	testGemHomepage  = "https://github.com/example/test_gem"
 	testGemRack      = "rack"
+	testGemPuma      = "puma"
 	testDevelopment  = "development"
 	testConstraint20 = "~> 2.0"
+	nilStr           = "nil"
 )
 
 func TestGemspecParser(t *testing.T) {
@@ -348,7 +350,7 @@ func TestLoadGemspecDependencies(t *testing.T) {
 	// Check that runtime dependencies are included
 	var foundRack bool
 	for _, dep := range deps {
-		if dep.Name == "rack" {
+		if dep.Name == testGemRack {
 			foundRack = true
 			if len(dep.Groups) != 1 || dep.Groups[0] != "default" {
 				t.Errorf("Expected rack to be in default group, got %v", dep.Groups)
@@ -400,7 +402,7 @@ func TestGemfileWithGemspecDirective(t *testing.T) {
 	// Check that other gems are also parsed
 	var foundPuma bool
 	for _, dep := range parsed.Dependencies {
-		if dep.Name == "puma" {
+		if dep.Name == testGemPuma {
 			foundPuma = true
 			if len(dep.Constraints) != 1 || dep.Constraints[0] != "~> 5.6" {
 				t.Errorf("Expected puma version '~> 5.6', got %v", dep.Constraints)
@@ -428,7 +430,7 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get absolute path: %v", err)
 	}
-	
+
 	// Make it relative to current directory for the test
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -438,9 +440,9 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to make relative path: %v", err)
 	}
-	
+
 	// Verify the file exists before parsing
-	if _, err := os.Stat(relativePath); os.IsNotExist(err) {
+	if _, errStat := os.Stat(relativePath); os.IsNotExist(errStat) {
 		t.Skipf("Test file not found at %s, skipping test", relativePath)
 	}
 
@@ -465,7 +467,7 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 	//   gemfileDir = filepath.Dir(relativePath)
 	//   gemspecRef.Path = "." (raw path from Gemfile)
 	//   searchPath = filepath.Join(gemfileDir, ".") = gemfileDir ✓
-	
+
 	// Verify the gem itself was loaded
 	var foundTestRelative bool
 	var testRelativePath string
@@ -473,7 +475,7 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 		if dep.Name == "test_relative" {
 			foundTestRelative = true
 			// Verify it's a path dependency
-			if dep.Source == nil || dep.Source.Type != "path" {
+			if dep.Source == nil || dep.Source.Type != pathSource {
 				t.Errorf("Expected test_relative to be a path dependency, got %v", dep.Source)
 			}
 			if dep.Source != nil {
@@ -493,7 +495,7 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 		// Log all dependencies for debugging
 		t.Logf("Total dependencies found: %d", len(parsed.Dependencies))
 		for i, dep := range parsed.Dependencies {
-			srcInfo := "nil"
+			srcInfo := nilStr
 			if dep.Source != nil {
 				srcInfo = dep.Source.URL
 			}
@@ -505,7 +507,7 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 	// Verify runtime dependencies from the gemspec were also loaded
 	var foundRack bool
 	for _, dep := range parsed.Dependencies {
-		if dep.Name == "rack" {
+		if dep.Name == testGemRack {
 			foundRack = true
 			break
 		}
@@ -517,7 +519,7 @@ func TestGemspecPathResolutionWithRelativeGemfilePath(t *testing.T) {
 	// Also verify that gems directly in the Gemfile are still parsed
 	var foundPuma bool
 	for _, dep := range parsed.Dependencies {
-		if dep.Name == "puma" {
+		if dep.Name == testGemPuma {
 			foundPuma = true
 			break
 		}

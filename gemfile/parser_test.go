@@ -1010,9 +1010,9 @@ gem 'another_gem', path: './relative/path'
 	// Create a temporary directory structure
 	tmpDir := t.TempDir()
 	gemfilePath := filepath.Join(tmpDir, "Gemfile")
-	err := os.WriteFile(gemfilePath, []byte(gemfileContent), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write test Gemfile: %v", err)
+	errWrite := os.WriteFile(gemfilePath, []byte(gemfileContent), 0600)
+	if errWrite != nil {
+		t.Fatalf("Failed to write test Gemfile: %v", errWrite)
 	}
 
 	// Parse with the main parser (will use tree-sitter if conditions are met)
@@ -1044,7 +1044,7 @@ gem 'another_gem', path: './relative/path'
 			t.Errorf("Expected source for gem %s", dep.Name)
 			continue
 		}
-		if dep.Source.Type != "path" {
+		if dep.Source.Type != pathSource {
 			t.Errorf("Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
 			continue
 		}
@@ -1059,7 +1059,7 @@ gem 'another_gem', path: './relative/path'
 			t.Errorf("Tree-sitter: Expected source for gem %s", dep.Name)
 			continue
 		}
-		if dep.Source.Type != "path" {
+		if dep.Source.Type != pathSource {
 			t.Errorf("Tree-sitter: Expected path source for gem %s, got %s", dep.Name, dep.Source.Type)
 			continue
 		}
