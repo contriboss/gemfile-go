@@ -107,6 +107,17 @@ func AddGemCommand(gemfilePath string, opts *AddOptions) error {
 		return fmt.Errorf("failed to add gem to Gemfile: %w", err)
 	}
 
+	// Fallback to bundle install
+	if !opts.SkipInstall {
+		installOpts := &InstallOptions{
+			Gemfile: gemfilePath,
+			Path:    opts.Path,
+		}
+		if err := Install(installOpts); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -130,6 +141,16 @@ func RemoveGemCommand(gemfilePath string, opts RemoveOptions) error {
 	for _, gemName := range opts.GemNames {
 		if err := RemoveGemFromFile(gemfilePath, gemName); err != nil {
 			return fmt.Errorf("failed to remove gem %q: %w", gemName, err)
+		}
+	}
+
+	// Fallback to bundle install
+	if opts.Install {
+		installOpts := &InstallOptions{
+			Gemfile: gemfilePath,
+		}
+		if err := Install(installOpts); err != nil {
+			return err
 		}
 	}
 

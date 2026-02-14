@@ -9,6 +9,7 @@ import (
 
 // TestAddGemCommand tests the add gem command
 func TestAddGemCommand(t *testing.T) {
+	t.Setenv("SKIP_BUNDLE_INSTALL", "true")
 	tests := []struct {
 		name            string
 		initialGemfile  string
@@ -177,6 +178,7 @@ gem 'rails'`,
 			}
 
 			// Run add command
+			tt.opts.SkipInstall = true
 			err = AddGemCommand(gemfilePath, &tt.opts)
 
 			// Check error expectation
@@ -209,6 +211,7 @@ gem 'rails'`,
 
 // TestRemoveGemCommand tests the remove gem command
 func TestRemoveGemCommand(t *testing.T) {
+	t.Setenv("SKIP_BUNDLE_INSTALL", "true")
 	tests := []struct {
 		name            string
 		initialGemfile  string
@@ -278,6 +281,7 @@ gem 'rails'`,
 			}
 
 			// Run remove command
+			tt.opts.Install = false
 			err = RemoveGemCommand(gemfilePath, tt.opts)
 
 			// Check error expectation
