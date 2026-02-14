@@ -82,6 +82,15 @@ func NewGemfileParser(filePath string) *GemfileParser {
 	return &GemfileParser{filepath: filePath}
 }
 
+// containsConditionalKeywords checks if content contains if/unless keywords at line starts
+// to avoid false positives from comments or string literals
+func containsConditionalKeywords(content string) bool {
+	// Match if/unless at the start of lines (with optional leading whitespace)
+	// \b ensures word boundary to avoid matching "unlessify" etc.
+	re := regexp.MustCompile(`(?m)^\s*(if|unless)\b`)
+	return re.MatchString(content)
+}
+
 // Parse parses the Gemfile and returns structured data
 // It tries tree-sitter first (most robust), then falls back to regex parsing
 func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
@@ -103,8 +112,7 @@ func (p *GemfileParser) Parse() (*ParsedGemfile, error) {
 		(len(gemfile.Dependencies) > 0 || gemfile.RubyVersion != "") &&
 		len(gemfile.Gemspecs) == 0 &&
 		!strings.Contains(p.content, "eval_gemfile") &&
-		!strings.Contains(p.content, "if ") &&
-		!strings.Contains(p.content, "unless ")
+		!containsConditionalKeywords(p.content)
 
 	if useTreeSitter {
 		return gemfile, nil

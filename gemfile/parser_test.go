@@ -935,6 +935,69 @@ gem 'my_gem', ENV["MY_GEM_VERSION"]
 	})
 }
 
+func TestContainsConditionalKeywords(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected bool
+	}{
+		{
+			name:     "actual if statement",
+			content:  "if ENV['TEST']\n  gem 'test'\nend",
+			expected: true,
+		},
+		{
+			name:     "actual unless statement",
+			content:  "unless ENV['SKIP']\n  gem 'test'\nend",
+			expected: true,
+		},
+		{
+			name:     "if with leading whitespace",
+			content:  "  if RUBY_VERSION > '3.0'\n    gem 'modern'\n  end",
+			expected: true,
+		},
+		{
+			name:     "if in comment should not match",
+			content:  "# if you need this gem\ngem 'test'",
+			expected: false,
+		},
+		{
+			name:     "if in string should not match",
+			content:  "gem 'test', description: 'if you need it'",
+			expected: false,
+		},
+		{
+			name:     "unless in string should not match",
+			content:  "gem 'test', note: 'unless specified otherwise'",
+			expected: false,
+		},
+		{
+			name:     "elsif keyword",
+			content:  "if ENV['A']\n  gem 'a'\nelsif ENV['B']\n  gem 'b'\nend",
+			expected: true,
+		},
+		{
+			name:     "word containing if but not keyword",
+			content:  "gem 'unify'",
+			expected: false,
+		},
+		{
+			name:     "no conditionals",
+			content:  "source 'https://rubygems.org'\ngem 'rails'",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := containsConditionalKeywords(tt.content)
+			if result != tt.expected {
+				t.Errorf("containsConditionalKeywords() = %v, expected %v for content:\n%s", result, tt.expected, tt.content)
+			}
+		})
+	}
+}
+
 // TestPathNormalizationConsistency verifies that both tree-sitter and regex parsers
 // normalize relative path sources consistently
 func TestPathNormalizationConsistency(t *testing.T) {
