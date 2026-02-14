@@ -359,7 +359,7 @@ func (p *GemfileParser) evaluateEnvFetchCasecmp(condition string) (result, handl
 		evalSource = defaultValueLabel
 	}
 	result = strings.EqualFold(envVal, targetValue)
-	fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) casecmp? %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] using %s -> %v\n", envVarName, evalSource, result)
 	return result, true
 }
 
@@ -381,7 +381,7 @@ func (p *GemfileParser) evaluateEnvFetchEq(condition string) (result, handled bo
 		evalSource = defaultValueLabel
 	}
 	result = envVal == targetValue
-	fmt.Printf("Warning: Evaluated ENV check: %s (using %s: %s) == %s -> %v\n", condition, evalSource, envVal, targetValue, result)
+	fmt.Printf("Warning: Evaluated ENV check for ENV[%s] using %s -> %v\n", envVarName, evalSource, result)
 	return result, true
 }
 
@@ -397,10 +397,10 @@ func (p *GemfileParser) evaluateEnvEq(condition string) (result, handled bool) {
 	// In Ruby, ENV["X"] returns nil when unset, so ENV["X"] == "" is false when X is unset
 	if !envSet {
 		result = false
-		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=<unset>) == %s -> %v\n", condition, envVarName, targetValue, result)
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] (unset) -> %v\n", envVarName, result)
 	} else {
 		result = envVal == targetValue
-		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) == %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
 	}
 	return result, true
 }
@@ -417,10 +417,10 @@ func (p *GemfileParser) evaluateEnvNeq(condition string) (result, handled bool) 
 	// In Ruby, ENV["X"] returns nil when unset, so ENV["X"] != "" is true when X is unset
 	if !envSet {
 		result = true
-		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=<unset>) != %s -> %v\n", condition, envVarName, targetValue, result)
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] (unset) -> %v\n", envVarName, result)
 	} else {
 		result = envVal != targetValue
-		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) != %s -> %v\n", condition, envVarName, envVal, targetValue, result)
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
 	}
 	return result, true
 }
@@ -432,15 +432,14 @@ func (p *GemfileParser) evaluateEnvTruthy(condition string) (result, handled boo
 		return false, false
 	}
 	envVarName := matches[1]
-	envVal, ok := os.LookupEnv(envVarName)
+	_, ok := os.LookupEnv(envVarName)
 	if !ok {
 		result = false
-		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=<unset>) -> %v\n", condition, envVarName, result)
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] (unset) -> %v\n", envVarName, result)
 	} else {
 		result = true
-		fmt.Printf("Warning: Evaluated ENV check: %s (ENV[%s]=%s) -> %v\n", condition, envVarName, envVal, result)
+		fmt.Printf("Warning: Evaluated ENV check for ENV[%s] -> %v\n", envVarName, result)
 	}
-	return result, true
 	return result, true
 }
 
