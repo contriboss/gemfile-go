@@ -624,4 +624,25 @@ func TestParseFileIfPresent(t *testing.T) {
 			t.Fatalf("Expected lockfile, got nil")
 		}
 	})
+
+	t.Run("invalid lockfile returns parse error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "Gemfile.lock")
+
+		// Write clearly invalid content to trigger a parse error.
+		if err := os.WriteFile(path, []byte("<<<<<<<\n"), 0600); err != nil {
+			t.Fatalf("Failed to write lockfile: %v", err)
+		}
+
+		lock, err := ParseFileIfPresent(path)
+		if err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+		if !errors.Is(err, ErrLockfileInvalid) {
+			t.Fatalf("Expected ErrLockfileInvalid, got %v", err)
+		}
+		if lock != nil {
+			t.Fatalf("Expected nil lockfile on parse error, got %v", lock)
+		}
+	})
 }
