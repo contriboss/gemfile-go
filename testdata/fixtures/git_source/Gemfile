@@ -1,6 +1,0 @@
-# frozen_string_literal: true
-
-source "https://rubygems.org"
-
-gem "no_fly_list", git: "https://github.com/contriboss/no_fly_list.git", tag: "v0.6.0"
-gem "rake", "~> 13.0"
