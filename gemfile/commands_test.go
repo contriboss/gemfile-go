@@ -9,6 +9,7 @@ import (
 
 // TestAddGemCommand tests the add gem command
 func TestAddGemCommand(t *testing.T) {
+	t.Setenv("SKIP_BUNDLE_INSTALL", "true")
 	tests := []struct {
 		name            string
 		initialGemfile  string
@@ -177,6 +178,7 @@ gem 'rails'`,
 			}
 
 			// Run add command
+			tt.opts.SkipInstall = true
 			err = AddGemCommand(gemfilePath, &tt.opts)
 
 			// Check error expectation
@@ -209,6 +211,7 @@ gem 'rails'`,
 
 // TestRemoveGemCommand tests the remove gem command
 func TestRemoveGemCommand(t *testing.T) {
+	t.Setenv("SKIP_BUNDLE_INSTALL", "true")
 	tests := []struct {
 		name            string
 		initialGemfile  string
@@ -278,6 +281,7 @@ gem 'rails'`,
 			}
 
 			// Run remove command
+			tt.opts.Install = false
 			err = RemoveGemCommand(gemfilePath, tt.opts)
 
 			// Check error expectation
@@ -403,4 +407,61 @@ func TestFindGemfile(t *testing.T) {
 	if result != defaultGemfileName {
 		t.Fatalf("Expected 'Gemfile' but got %q", result)
 	}
+}
+
+func TestMaybeInstallLockfileNaming(t *testing.T) {
+	t.Setenv("PATH", "")
+
+	t.Run("gems.rb uses gems.locked", func(t *testing.T) {
+		t.Setenv("SKIP_BUNDLE_INSTALL", "")
+
+		tmpDir := t.TempDir()
+		gemfilePath := filepath.Join(tmpDir, "gems.rb")
+		lockfilePath := filepath.Join(tmpDir, "gems.locked")
+
+		if err := os.WriteFile(gemfilePath, []byte("source 'https://rubygems.org'\n"), 0600); err != nil {
+			t.Fatalf("Failed to write Gemfile: %v", err)
+		}
+		if err := os.WriteFile(lockfilePath, []byte("GEM\n"), 0600); err != nil {
+			t.Fatalf("Failed to write lockfile: %v", err)
+		}
+
+		if err := maybeInstall(gemfilePath, false); err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	})
+
+	t.Run("custom .gemfile uses .lock", func(t *testing.T) {
+		t.Setenv("SKIP_BUNDLE_INSTALL", "")
+
+		tmpDir := t.TempDir()
+		gemfilePath := filepath.Join(tmpDir, "Appraisal.gemfile")
+		lockfilePath := gemfilePath + ".lock"
+
+		if err := os.WriteFile(gemfilePath, []byte("source 'https://rubygems.org'\n"), 0600); err != nil {
+			t.Fatalf("Failed to write Gemfile: %v", err)
+		}
+		if err := os.WriteFile(lockfilePath, []byte("GEM\n"), 0600); err != nil {
+			t.Fatalf("Failed to write lockfile: %v", err)
+		}
+
+		if err := maybeInstall(gemfilePath, false); err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+	})
+
+	t.Run("missing lockfile triggers install", func(t *testing.T) {
+		t.Setenv("SKIP_BUNDLE_INSTALL", "")
+
+		tmpDir := t.TempDir()
+		gemfilePath := filepath.Join(tmpDir, "gems.rb")
+
+		if err := os.WriteFile(gemfilePath, []byte("source 'https://rubygems.org'\n"), 0600); err != nil {
+			t.Fatalf("Failed to write Gemfile: %v", err)
+		}
+
+		if err := maybeInstall(gemfilePath, false); err == nil {
+			t.Fatalf("Expected error when lockfile is missing")
+		}
+	})
 }

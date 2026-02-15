@@ -1,6 +1,0 @@
-source 'https://rubygems.org'
-
-# This gemspec directive should work correctly with relative paths
-gemspec
-
-gem 'puma', '~> 5.0'

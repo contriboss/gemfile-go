@@ -1,6 +1,6 @@
 # gemfile-go 💎 → 🐹
 
-> Parse Ruby's Gemfile and Gemfile.lock in pure Go - no Ruby required!
+> Parse Ruby's Gemfile.lock in pure Go - no Ruby required!
 
 [![CI](https://github.com/contriboss/gemfile-go/actions/workflows/ci.yml/badge.svg)](https://github.com/contriboss/gemfile-go/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/contriboss/gemfile-go.svg)](https://pkg.go.dev/github.com/contriboss/gemfile-go)
@@ -79,28 +79,7 @@ if gem != nil {
 
 ### Parse a Gemfile
 
-```go
-package main
-
-import (
-    "github.com/contriboss/gemfile-go/gemfile"
-)
-
-func main() {
-    // Parse the Gemfile (the wishlist, not the lockfile!)
-    gems, err := gemfile.ParseFile("Gemfile")
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // See what's in the development group
-    for _, gem := range gems {
-        if gem.HasGroup("development") {
-            fmt.Printf("Dev gem: %s\n", gem.Name)
-        }
-    }
-}
-```
+Gemfiles and gemspecs can have arbitrary Ruby code in them, which makes support untenable.
 
 ## 🎭 Fun Features
 
@@ -159,7 +138,7 @@ mage ci
 
 1. **No Version Operators**: In Ruby you have `~>`, `>=`, etc. In the lockfile, versions are exact, so we just use strings.
 
-2. **No Gem Installation**: This library *reads* Gemfile.lock but doesn't install gems. Think of it as read-only Bundler.
+2. **No Gem Installation**: This library *reads* Gemfile.lock but doesn't install gems. Think of it as read-only Bundler. The sibling project [ore](https://github.com/contriboss/ore-light) **will** install your gems (also without Ruby).
 
 3. **Groups as Strings**: Ruby uses symbols (`:development`), we use strings (`"development"`).
 
