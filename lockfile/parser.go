@@ -142,6 +142,18 @@ var (
 	depRegex     = regexp.MustCompile(`^ {6}([a-zA-Z0-9\-_]+)(?: \(([^)]+)\))?$`)
 )
 
+// ParseLockfile parses a Gemfile.lock from a file path.
+// This is the hard API: missing or invalid lockfiles return an error.
+func ParseLockfile(path string) (*Lockfile, error) {
+	return ParseFile(path)
+}
+
+// ParseLockfileIfPresent parses a Gemfile.lock if it exists.
+// This is the soft API: missing lockfiles return (nil, nil).
+func ParseLockfileIfPresent(path string) (*Lockfile, error) {
+	return ParseFileIfPresent(path)
+}
+
 // ParseFile parses a Gemfile.lock from a file path.
 // This is the hard API: missing or invalid lockfiles return an error.
 func ParseFile(path string) (*Lockfile, error) {
