@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 // InstallOptions represents options for the install command
@@ -15,16 +16,26 @@ type InstallOptions struct {
 
 // Install runs 'bundle install' with appropriate environment variables
 func Install(opts *InstallOptions) error {
+	return InstallContext(context.Background(), opts)
+}
+
+// InstallContext runs 'bundle install' with a caller-provided context.
+func InstallContext(ctx context.Context, opts *InstallOptions) error {
 	if os.Getenv("SKIP_BUNDLE_INSTALL") == "true" {
 		return nil
 	}
-	cmd := exec.CommandContext(context.Background(), "bundle", "install")
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	cmd := exec.CommandContext(ctx, "bundle", "install")
 
 	// Add environment variables
 	cmd.Env = os.Environ()
 
 	if opts.Gemfile != "" {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("BUNDLE_GEMFILE=%s", opts.Gemfile))
+		cmd.Dir = filepath.Dir(opts.Gemfile)
 	}
 
 	if opts.InstallPath != "" {

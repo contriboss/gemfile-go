@@ -6,6 +6,10 @@
 
 * Fallback to bundler install when lockfile missing
 
+### Bug Fixes
+
+* Run bundle install from the Gemfile directory and support context-aware execution
+
 ## [0.12.0](https://github.com/contriboss/gemfile-go/compare/v0.11.0...v0.12.0) (2026-02-14)
 
 
