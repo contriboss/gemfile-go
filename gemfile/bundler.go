@@ -9,8 +9,8 @@ import (
 
 // InstallOptions represents options for the install command
 type InstallOptions struct {
-	Gemfile string
-	Path    string
+	Gemfile     string
+	InstallPath string
 }
 
 // Install runs 'bundle install' with appropriate environment variables
@@ -27,10 +27,10 @@ func Install(opts *InstallOptions) error {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("BUNDLE_GEMFILE=%s", opts.Gemfile))
 	}
 
-	if opts.Path != "" {
+	if opts.InstallPath != "" {
 		// support for the --path option has been removed from bundler v4.0.6,
 		// so we'll need to set BUNDLE_PATH on the CLI
-		cmd.Env = append(cmd.Env, fmt.Sprintf("BUNDLE_PATH=%s", opts.Path))
+		cmd.Env = append(cmd.Env, fmt.Sprintf("BUNDLE_PATH=%s", opts.InstallPath))
 	}
 
 	cmd.Stdout = os.Stdout

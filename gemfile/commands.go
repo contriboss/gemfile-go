@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/contriboss/gemfile-go/lockfile"
 )
 
 const (
@@ -36,40 +38,78 @@ type RemoveOptions struct {
 
 // AddGemCommand handles the ore add command
 func AddGemCommand(gemfilePath string, opts *AddOptions) error {
-	// Validate gem name
 	if opts.Name == "" {
 		return fmt.Errorf("gem name is required")
 	}
 
-	// Find Gemfile
+	resolvedGemfilePath, err := resolveGemfilePath(gemfilePath)
+	if err != nil {
+		return err
+	}
+
+	dep := buildDependency(opts)
+
+	if err := AddGemToFile(resolvedGemfilePath, &dep); err != nil {
+		return fmt.Errorf("failed to add gem to Gemfile: %w", err)
+	}
+
+	if err := maybeInstall(resolvedGemfilePath, opts.SkipInstall); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func resolveGemfilePath(gemfilePath string) (string, error) {
 	if gemfilePath == "" {
 		gemfilePath = findGemfile()
 	}
 
 	if _, err := os.Stat(gemfilePath); os.IsNotExist(err) {
-		return fmt.Errorf("gemfile not found, use 'ore init' to create one")
+		return "", fmt.Errorf("gemfile not found, use 'ore init' to create one")
 	}
 
-	// Build dependency
+	return gemfilePath, nil
+}
+
+func buildDependency(opts *AddOptions) GemDependency {
 	dep := GemDependency{
 		Name:    opts.Name,
 		Groups:  opts.Groups,
 		Require: opts.Require,
 	}
 
-	// Handle version constraints
-	if opts.Version != "" {
-		if opts.Strict {
-			dep.Constraints = []string{"= " + opts.Version}
-		} else if opts.Optimistic {
-			dep.Constraints = []string{">= " + opts.Version}
-		} else {
-			dep.Constraints = []string{opts.Version}
-		}
+	applyVersionConstraints(opts, &dep)
+	applySourceOptions(opts, &dep)
+
+	if len(dep.Groups) == 0 {
+		dep.Groups = []string{"default"}
 	}
 
-	// Handle source options
-	if opts.Git != "" {
+	return dep
+}
+
+func applyVersionConstraints(opts *AddOptions, dep *GemDependency) {
+	if opts.Version == "" {
+		return
+	}
+
+	if opts.Strict {
+		dep.Constraints = []string{"= " + opts.Version}
+		return
+	}
+
+	if opts.Optimistic {
+		dep.Constraints = []string{">= " + opts.Version}
+		return
+	}
+
+	dep.Constraints = []string{opts.Version}
+}
+
+func applySourceOptions(opts *AddOptions, dep *GemDependency) {
+	switch {
+	case opts.Git != "":
 		dep.Source = &Source{
 			Type:   "git",
 			URL:    opts.Git,
@@ -77,7 +117,7 @@ func AddGemCommand(gemfilePath string, opts *AddOptions) error {
 			Tag:    opts.Tag,
 			Ref:    opts.Ref,
 		}
-	} else if opts.Github != "" {
+	case opts.Github != "":
 		dep.Source = &Source{
 			Type:   "git",
 			URL:    fmt.Sprintf("https://github.com/%s.git", opts.Github),
@@ -85,33 +125,31 @@ func AddGemCommand(gemfilePath string, opts *AddOptions) error {
 			Tag:    opts.Tag,
 			Ref:    opts.Ref,
 		}
-	} else if opts.Path != "" {
+	case opts.Path != "":
 		dep.Source = &Source{
 			Type: "path",
 			URL:  opts.Path,
 		}
-	} else if opts.Source != "" {
+	case opts.Source != "":
 		dep.Source = &Source{
 			Type: "rubygems",
 			URL:  opts.Source,
 		}
 	}
+}
 
-	// Set default groups if none specified
-	if len(dep.Groups) == 0 {
-		dep.Groups = []string{"default"}
+func maybeInstall(gemfilePath string, skipInstall bool) error {
+	if skipInstall {
+		return nil
 	}
 
-	// Add gem to Gemfile
-	if err := AddGemToFile(gemfilePath, &dep); err != nil {
-		return fmt.Errorf("failed to add gem to Gemfile: %w", err)
-	}
-
-	// Fallback to bundle install
-	if !opts.SkipInstall {
+	lockfilePath := lockfile.DetermineLockfilePath(gemfilePath)
+	if _, err := os.Stat(lockfilePath); err != nil {
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("failed to check %s: %w", lockfilePath, err)
+		}
 		installOpts := &InstallOptions{
 			Gemfile: gemfilePath,
-			Path:    opts.Path,
 		}
 		if err := Install(installOpts); err != nil {
 			return err
