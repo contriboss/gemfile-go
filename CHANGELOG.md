@@ -11,6 +11,13 @@
 * Raise errors when lockfiles are missing or invalid instead of invoking bundler
 * Never install gems - remain read-only
 
+## [0.14.0](https://github.com/contriboss/gemfile-go/compare/v0.13.0...v0.14.0) (2026-02-15)
+
+
+### Features
+
+* ✨ Soft & Hard APIs ([16a8c56](https://github.com/contriboss/gemfile-go/commit/16a8c56cf414837a0d352ce29191c8082ebbb84b))
+
 ## [0.13.0](https://github.com/contriboss/gemfile-go/compare/v0.12.0...v0.13.0) (2026-02-15)
 
 
