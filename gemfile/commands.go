@@ -175,7 +175,11 @@ func RemoveGemCommand(gemfilePath string, opts RemoveOptions) error {
 	}
 
 	if opts.Install {
-		return fmt.Errorf("bundle install is not supported by gemfile-go: this library only edits an existing Gemfile and lockfile. Ensure your lockfile exists and is valid, then run `bundle install` separately with Bundler")
+		return fmt.Errorf(
+			"bundle install is not supported by gemfile-go: this library only edits an existing " +
+				"Gemfile and lockfile. Ensure your lockfile exists and is valid, then run " +
+				"`bundle install` separately with Bundler",
+		)
 	}
 
 	return nil
