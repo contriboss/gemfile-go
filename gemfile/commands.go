@@ -47,14 +47,14 @@ func AddGemCommand(gemfilePath string, opts *AddOptions) error {
 		return err
 	}
 
+	if err := ensureLockfile(resolvedGemfilePath); err != nil {
+		return err
+	}
+
 	dep := buildDependency(opts)
 
 	if err := AddGemToFile(resolvedGemfilePath, &dep); err != nil {
 		return fmt.Errorf("failed to add gem to Gemfile: %w", err)
-	}
-
-	if err := maybeInstall(resolvedGemfilePath, opts.SkipInstall); err != nil {
-		return err
 	}
 
 	return nil
@@ -138,22 +138,10 @@ func applySourceOptions(opts *AddOptions, dep *GemDependency) {
 	}
 }
 
-func maybeInstall(gemfilePath string, skipInstall bool) error {
-	if skipInstall {
-		return nil
-	}
-
+func ensureLockfile(gemfilePath string) error {
 	lockfilePath := lockfile.DetermineLockfilePath(gemfilePath)
-	if _, err := os.Stat(lockfilePath); err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("failed to check %s: %w", lockfilePath, err)
-		}
-		installOpts := &InstallOptions{
-			Gemfile: gemfilePath,
-		}
-		if err := Install(installOpts); err != nil {
-			return err
-		}
+	if _, err := lockfile.ParseFile(lockfilePath); err != nil {
+		return err
 	}
 
 	return nil
@@ -175,6 +163,10 @@ func RemoveGemCommand(gemfilePath string, opts RemoveOptions) error {
 		return fmt.Errorf("gemfile not found")
 	}
 
+	if err := ensureLockfile(gemfilePath); err != nil {
+		return err
+	}
+
 	// Remove each gem
 	for _, gemName := range opts.GemNames {
 		if err := RemoveGemFromFile(gemfilePath, gemName); err != nil {
@@ -182,14 +174,8 @@ func RemoveGemCommand(gemfilePath string, opts RemoveOptions) error {
 		}
 	}
 
-	// Fallback to bundle install
 	if opts.Install {
-		installOpts := &InstallOptions{
-			Gemfile: gemfilePath,
-		}
-		if err := Install(installOpts); err != nil {
-			return err
-		}
+		return fmt.Errorf("bundle install is not supported by gemfile-go")
 	}
 
 	return nil
