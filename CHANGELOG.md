@@ -4,11 +4,12 @@
 
 ### Features
 
-* Fallback to bundler install when lockfile missing
+* Add soft and hard lockfile parsing APIs
 
 ### Bug Fixes
 
-* Run bundle install from the Gemfile directory and support context-aware execution
+* Raise errors when lockfiles are missing or invalid instead of invoking bundler
+* Never install gems - remain read-only
 
 ## [0.13.0](https://github.com/contriboss/gemfile-go/compare/v0.12.0...v0.13.0) (2026-02-15)
 

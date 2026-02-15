@@ -24,7 +24,7 @@ Welcome Ruby friend! 👋 Here's a translation guide:
 
 | Ruby Concept | Go Equivalent in This Library |
 |-------------|-------------------------------|
-| `Bundler.locked_gems` | `lockfile.ParseFile()` |
+| `Bundler.locked_gems` | `lockfile.ParseLockfile()` |
 | `gem.dependencies` | `GemSpec.Dependencies` |
 | `Gem::Version` | String (but semver compatible) |
 | `bundle install` | Parse lockfile → download gems |
@@ -45,8 +45,8 @@ import (
 )
 
 func main() {
-    // Parse your Gemfile.lock
-    lock, err := lockfile.ParseFile("Gemfile.lock")
+    // Parse your Gemfile.lock (hard API: error if missing)
+    lock, err := lockfile.ParseLockfile("Gemfile.lock")
     if err != nil {
         log.Fatal(err)
     }
@@ -164,6 +164,30 @@ mage ci
 ## 📚 API Documentation
 
 Full API docs at [pkg.go.dev](https://pkg.go.dev/github.com/contriboss/gemfile-go)
+
+### Lockfile Parsing APIs
+
+This library exposes both hard and soft parsing helpers so callers can decide whether a missing lockfile should be an error.
+
+Hard API (missing or invalid lockfile returns an error):
+
+```go
+lock, err := lockfile.ParseLockfile("Gemfile.lock")
+```
+
+Soft API (missing lockfile returns `nil, nil`):
+
+```go
+lock, err := lockfile.ParseLockfileIfPresent("Gemfile.lock")
+if err != nil {
+    // parse error or read error
+}
+if lock == nil {
+    // lockfile is missing
+}
+```
+
+The shorter `ParseFile` and `ParseFileIfPresent` helpers are also available if you prefer those names.
 
 ## 🧪 Testing
 
