@@ -4,8 +4,6 @@
 
 ### Features
 
-* Add back gemfile parsing
-
 
 ## [0.15.0](https://github.com/contriboss/gemfile-go/compare/v0.12.0...v0.15.0) (2026-02-16)
 
