@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -101,7 +102,7 @@ func Examples() error {
 			continue
 		}
 		fmt.Printf("Running %s...\n", example)
-		cmd := exec.Command("go", "run", example)
+		cmd := exec.CommandContext(context.Background(), "go", "run", example)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {

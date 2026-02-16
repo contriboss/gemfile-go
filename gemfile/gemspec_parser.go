@@ -14,18 +14,6 @@ import (
 	"time"
 )
 
-const (
-	// defaultGlobPattern is the default glob pattern for finding gemspec files
-	defaultGlobPattern = "{,*,*/*}.gemspec"
-	// developmentGroup is the default group name for development dependencies
-	developmentGroup = "development"
-)
-
-// GemspecParser handles parsing of .gemspec files
-type GemspecParser struct {
-	filepath string
-}
-
 // NewGemspecParser creates a new gemspec parser for the given file path
 func NewGemspecParser(filePath string) *GemspecParser {
 	return &GemspecParser{filepath: filePath}
