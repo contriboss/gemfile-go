@@ -1,6 +1,7 @@
 package lockfile
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -558,4 +559,90 @@ BUNDLED WITH
 	if lockfile.PathSpecs[0].Glob != "*.gemspec" {
 		t.Errorf("Expected glob '*.gemspec', got '%s'", lockfile.PathSpecs[0].Glob)
 	}
+}
+
+func TestParseFileErrors(t *testing.T) {
+	t.Run("missing lockfile returns typed not found error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "Gemfile.lock")
+
+		_, err := ParseFile(path)
+		if err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+		if !errors.Is(err, ErrLockfileNotFound) {
+			t.Fatalf("Expected ErrLockfileNotFound, got %v", err)
+		}
+	})
+
+	t.Run("invalid lockfile returns typed parse error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "Gemfile.lock")
+
+		if err := os.WriteFile(path, []byte("<<<<<<<\n"), 0600); err != nil {
+			t.Fatalf("Failed to write lockfile: %v", err)
+		}
+
+		_, err := ParseFile(path)
+		if err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+		if !errors.Is(err, ErrLockfileInvalid) {
+			t.Fatalf("Expected ErrLockfileInvalid, got %v", err)
+		}
+	})
+}
+
+func TestParseFileIfPresent(t *testing.T) {
+	t.Run("missing lockfile returns nil", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "Gemfile.lock")
+
+		lock, err := ParseFileIfPresent(path)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+		if lock != nil {
+			t.Fatalf("Expected nil lockfile, got %v", lock)
+		}
+	})
+
+	t.Run("present lockfile parses", func(t *testing.T) {
+		content := "GEM\n  specs:\n\nPLATFORMS\n  ruby\n\nDEPENDENCIES\n\nBUNDLED WITH\n   2.3.26\n"
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "Gemfile.lock")
+
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("Failed to write lockfile: %v", err)
+		}
+
+		lock, err := ParseFileIfPresent(path)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+		if lock == nil {
+			t.Fatalf("Expected lockfile, got nil")
+		}
+	})
+
+	t.Run("invalid lockfile returns parse error", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		path := filepath.Join(tmpDir, "Gemfile.lock")
+
+		// Write clearly invalid content to trigger a parse error.
+		if err := os.WriteFile(path, []byte("<<<<<<<\n"), 0600); err != nil {
+			t.Fatalf("Failed to write lockfile: %v", err)
+		}
+
+		lock, err := ParseFileIfPresent(path)
+		if err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+		if !errors.Is(err, ErrLockfileInvalid) {
+			t.Fatalf("Expected ErrLockfileInvalid, got %v", err)
+		}
+		if lock != nil {
+			t.Fatalf("Expected nil lockfile on parse error, got %v", lock)
+		}
+	})
 }

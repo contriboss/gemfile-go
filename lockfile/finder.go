@@ -102,6 +102,13 @@ func FindGemfiles() (*FilePaths, error) {
 			"   💡 Create a Gemfile or set BUNDLE_GEMFILE environment variable")
 }
 
+// DetermineLockfilePath determines the lock file path based on the Gemfile path.
+// For custom gemfiles (e.g., Appraisal), returns the discrete lockfile path (gemfile + ".lock")
+// without fallback behavior. Each custom gemfile requires its own lockfile.
+func DetermineLockfilePath(gemfilePath string) string {
+	return determineLockfilePath(gemfilePath)
+}
+
 // determineLockfilePath determines the lock file path based on the Gemfile path
 // For custom gemfiles (e.g., Appraisal), returns the discrete lockfile path (gemfile + ".lock")
 // without fallback behavior. Each custom gemfile requires its own lockfile.

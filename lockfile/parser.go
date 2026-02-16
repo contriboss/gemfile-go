@@ -6,6 +6,7 @@ package lockfile
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -141,15 +142,50 @@ var (
 	depRegex     = regexp.MustCompile(`^ {6}([a-zA-Z0-9\-_]+)(?: \(([^)]+)\))?$`)
 )
 
+// ParseLockfile parses a Gemfile.lock from a file path.
+// This is the hard API: missing or invalid lockfiles return an error.
+func ParseLockfile(path string) (*Lockfile, error) {
+	return ParseFile(path)
+}
+
+// ParseLockfileIfPresent parses a Gemfile.lock if it exists.
+// This is the soft API: missing lockfiles return (nil, nil).
+func ParseLockfileIfPresent(path string) (*Lockfile, error) {
+	return ParseFileIfPresent(path)
+}
+
 // ParseFile parses a Gemfile.lock from a file path.
+// This is the hard API: missing or invalid lockfiles return an error.
 func ParseFile(path string) (*Lockfile, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open lockfile: %w", err)
+		if os.IsNotExist(err) {
+			return nil, &LockfileError{Kind: LockfileNotFound, Path: path, Err: err}
+		}
+		return nil, &LockfileError{Kind: LockfileReadError, Path: path, Err: err}
 	}
 	defer file.Close()
 
-	return Parse(file)
+	lockfile, err := Parse(file)
+	if err != nil {
+		return nil, &LockfileError{Kind: LockfileParseError, Path: path, Err: err}
+	}
+
+	return lockfile, nil
+}
+
+// ParseFileIfPresent parses a Gemfile.lock if it exists.
+// This is the soft API: missing lockfiles return (nil, nil).
+func ParseFileIfPresent(path string) (*Lockfile, error) {
+	lockfile, err := ParseFile(path)
+	if err != nil {
+		if errors.Is(err, ErrLockfileNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return lockfile, nil
 }
 
 // Parse reads and parses a Gemfile.lock from an io.Reader.

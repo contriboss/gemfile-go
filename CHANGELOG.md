@@ -4,18 +4,32 @@
 
 ### Features
 
-* ✨ support `eval_gemfile` macro for modular Gemfiles
-* ✨ enhance Ruby logic support in Gemfiles:
-    - support `if/elsif/else/unless` blocks in main Gemfile and `eval_gemfile`
-    - support `ENV.fetch` with optional default values
-    - support `casecmp?` for case-insensitive environment variable comparisons
-    - provide warnings when evaluating `ENV` checks
-    - detect and warn/error on unsupported `RUBY_VERSION` and `RUBY_ENGINE` comparisons
+* Add back gemfile parsing
+
+
+## [0.14.0](https://github.com/contriboss/gemfile-go/compare/v0.13.0...v0.14.0) (2026-02-15)
+
+
+### Features
+
+* ✨ Soft & Hard APIs ([16a8c56](https://github.com/contriboss/gemfile-go/commit/16a8c56cf414837a0d352ce29191c8082ebbb84b))
 
 ### Bug Fixes
 
-* fix relative path resolution for `eval_gemfile` to match Bundler behavior
-* ensure `gemspec` and `path:` sources are resolved relative to the Gemfile they are defined in
+* Raise errors when lockfiles are missing or invalid instead of invoking bundler
+* Never install gems - remain read-only
+
+## [0.13.0](https://github.com/contriboss/gemfile-go/compare/v0.12.0...v0.13.0) (2026-02-15)
+
+
+### Features
+
+* Fallback to bundle install when lockfile is missing ([0232609](https://github.com/contriboss/gemfile-go/commit/023260960b8958ec083b505ae0d4b5b99671f348))
+
+
+### Miscellaneous Chores
+
+* release 0.13.0 ([0232609](https://github.com/contriboss/gemfile-go/commit/023260960b8958ec083b505ae0d4b5b99671f348))
 
 ## [0.12.0](https://github.com/contriboss/gemfile-go/compare/v0.11.0...v0.12.0) (2026-02-14)
 
@@ -33,10 +47,10 @@
 
 * correct indentation in test function ([14a4030](https://github.com/contriboss/gemfile-go/commit/14a403071a763580a3545f97a6991b063b4cbc60))
 * relative path resolution in eval_gemfile to match Bundler behavior ([4b3be71](https://github.com/contriboss/gemfile-go/commit/4b3be71cf7038ddfbf3730affdaf850e45108a10))
+* ensure `gemspec` and `path:` sources are resolved relative to the Gemfile they are defined in
 * Remove ENV value logging to prevent secret leakage in CI logs ([ea3e573](https://github.com/contriboss/gemfile-go/commit/ea3e57340535b874504240fbca2b823f488b44f2))
 
 ## [0.11.0](https://github.com/contriboss/gemfile-go/compare/v0.10.0...v0.11.0) (2026-02-11)
-
 
 ### Features
 
