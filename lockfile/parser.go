@@ -135,6 +135,8 @@ const (
 	sectionCHECKSUMS    = "CHECKSUMS"
 	sectionRUBY         = "RUBY VERSION"
 	sectionBUNDLED_WITH = "BUNDLED_WITH"
+
+	defaultGroup = "default"
 )
 
 var (
@@ -781,7 +783,7 @@ func FilterGemsByGroups(gems []GemSpec, includeGroups, excludeGroups []string) [
 // getGemGroups returns the groups for a gem, defaulting to "default" if none specified
 func getGemGroups(gem *GemSpec) []string {
 	if len(gem.Groups) == 0 {
-		return []string{"default"}
+		return []string{defaultGroup}
 	}
 	return gem.Groups
 }
@@ -806,7 +808,7 @@ func isGemIncluded(gemGroups, includeGroups []string) bool {
 
 	for _, includeGroup := range includeGroups {
 		for _, gemGroup := range gemGroups {
-			if gemGroup == includeGroup || gemGroup == "default" {
+			if gemGroup == includeGroup || gemGroup == defaultGroup {
 				return true
 			}
 		}
@@ -842,7 +844,7 @@ func FilterGitGemsByGroups(gems []GitGemSpec, includeGroups, excludeGroups []str
 // getGitGemGroups returns the groups for a git gem, defaulting to "default" if none specified
 func getGitGemGroups(gem *GitGemSpec) []string {
 	if len(gem.Groups) == 0 {
-		return []string{"default"}
+		return []string{defaultGroup}
 	}
 	return gem.Groups
 }
@@ -875,7 +877,7 @@ func FilterPathGemsByGroups(gems []PathGemSpec, includeGroups, excludeGroups []s
 // getPathGemGroups returns the groups for a path gem, defaulting to "default" if none specified
 func getPathGemGroups(gem *PathGemSpec) []string {
 	if len(gem.Groups) == 0 {
-		return []string{"default"}
+		return []string{defaultGroup}
 	}
 	return gem.Groups
 }

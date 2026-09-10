@@ -223,36 +223,36 @@ func (p *GemspecParser) fallbackParse() (*GemspecFile, error) {
 // extractSimpleFields extracts simple string fields from gemspec content
 func (p *GemspecParser) extractSimpleFields(content string, gemspec *GemspecFile) {
 	patterns := map[string]*regexp.Regexp{
-		"name":                  regexp.MustCompile(`spec\.name\s*=\s*['"](.*?)['"]`),
-		"version":               regexp.MustCompile(`spec\.version\s*=\s*['"](.*?)['"]`),
-		"summary":               regexp.MustCompile(`spec\.summary\s*=\s*['"](.*?)['"]`),
-		"description":           regexp.MustCompile(`spec\.description\s*=\s*['"](.*?)['"]`),
-		"homepage":              regexp.MustCompile(`spec\.homepage\s*=\s*['"](.*?)['"]`),
-		"license":               regexp.MustCompile(`spec\.licenses?\s*=\s*['"](.*?)['"]`),
-		"required_ruby_version": regexp.MustCompile(`spec\.required_ruby_version\s*=\s*['"](.*?)['"]`),
+		gemspecNameKey:                regexp.MustCompile(`spec\.name\s*=\s*['"](.*?)['"]`),
+		gemspecVersionKey:             regexp.MustCompile(`spec\.version\s*=\s*['"](.*?)['"]`),
+		gemspecSummaryKey:             regexp.MustCompile(`spec\.summary\s*=\s*['"](.*?)['"]`),
+		gemspecDescriptionKey:         regexp.MustCompile(`spec\.description\s*=\s*['"](.*?)['"]`),
+		gemspecHomepageKey:            regexp.MustCompile(`spec\.homepage\s*=\s*['"](.*?)['"]`),
+		gemspecLicenseKey:             regexp.MustCompile(`spec\.licenses?\s*=\s*['"](.*?)['"]`),
+		gemspecRequiredRubyVersionKey: regexp.MustCompile(`spec\.required_ruby_version\s*=\s*['"](.*?)['"]`),
 	}
 
-	if match := patterns["name"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecNameKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.Name = match[1]
 	}
-	if match := patterns["version"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecVersionKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.Version = match[1]
 	} else if match := regexp.MustCompile(`spec\.version\s*=\s*([\w:]+)`).FindStringSubmatch(content); len(match) > 1 {
 		gemspec.Version = match[1]
 	}
-	if match := patterns["summary"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecSummaryKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.Summary = match[1]
 	}
-	if match := patterns["description"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecDescriptionKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.Description = match[1]
 	}
-	if match := patterns["homepage"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecHomepageKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.Homepage = match[1]
 	}
-	if match := patterns["license"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecLicenseKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.License = match[1]
 	}
-	if match := patterns["required_ruby_version"].FindStringSubmatch(content); len(match) > 1 {
+	if match := patterns[gemspecRequiredRubyVersionKey].FindStringSubmatch(content); len(match) > 1 {
 		gemspec.RequiredRubyVersion = match[1]
 	}
 }
@@ -436,7 +436,7 @@ func LoadGemspecDependencies(gemspecRef GemspecReference, gemfileDir string) ([]
 	// Add runtime dependencies (no group specification)
 	for _, dep := range gemspecFile.RuntimeDependencies {
 		// Runtime deps go to default group
-		dep.Groups = []string{"default"}
+		dep.Groups = []string{defaultGroup}
 		dependencies = append(dependencies, dep)
 	}
 
@@ -456,10 +456,10 @@ func LoadGemspecDependencies(gemspecRef GemspecReference, gemfileDir string) ([]
 	selfDep := GemDependency{
 		Name: gemspecFile.Name,
 		Source: &Source{
-			Type: "path",
+			Type: pathSource,
 			URL:  gemPath,
 		},
-		Groups: []string{"default"},
+		Groups: []string{defaultGroup},
 	}
 	dependencies = append([]GemDependency{selfDep}, dependencies...)
 

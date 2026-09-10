@@ -83,7 +83,7 @@ func buildDependency(opts *AddOptions) GemDependency {
 	applySourceOptions(opts, &dep)
 
 	if len(dep.Groups) == 0 {
-		dep.Groups = []string{"default"}
+		dep.Groups = []string{defaultGroup}
 	}
 
 	return dep
@@ -111,7 +111,7 @@ func applySourceOptions(opts *AddOptions, dep *GemDependency) {
 	switch {
 	case opts.Git != "":
 		dep.Source = &Source{
-			Type:   "git",
+			Type:   gitKey,
 			URL:    opts.Git,
 			Branch: opts.Branch,
 			Tag:    opts.Tag,
@@ -119,7 +119,7 @@ func applySourceOptions(opts *AddOptions, dep *GemDependency) {
 		}
 	case opts.Github != "":
 		dep.Source = &Source{
-			Type:   "git",
+			Type:   gitKey,
 			URL:    fmt.Sprintf("https://github.com/%s.git", opts.Github),
 			Branch: opts.Branch,
 			Tag:    opts.Tag,
@@ -127,12 +127,12 @@ func applySourceOptions(opts *AddOptions, dep *GemDependency) {
 		}
 	case opts.Path != "":
 		dep.Source = &Source{
-			Type: "path",
+			Type: pathSource,
 			URL:  opts.Path,
 		}
 	case opts.Source != "":
 		dep.Source = &Source{
-			Type: "rubygems",
+			Type: rubygemsSource,
 			URL:  opts.Source,
 		}
 	}

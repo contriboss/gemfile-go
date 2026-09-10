@@ -259,19 +259,19 @@ func (p *TreeSitterGemspecParser) extractAssignmentSides(node *tree_sitter.Node)
 // assignSimpleProperty assigns simple string properties to gemspec
 func (p *TreeSitterGemspecParser) assignSimpleProperty(property, value string, gemspec *GemspecFile) bool {
 	switch property {
-	case "name":
+	case gemspecNameKey:
 		gemspec.Name = value
-	case "version":
+	case gemspecVersionKey:
 		gemspec.Version = value
-	case "summary":
+	case gemspecSummaryKey:
 		gemspec.Summary = value
-	case "description":
+	case gemspecDescriptionKey:
 		gemspec.Description = value
-	case "homepage":
+	case gemspecHomepageKey:
 		gemspec.Homepage = value
-	case "license":
+	case gemspecLicenseKey:
 		gemspec.License = value
-	case "required_ruby_version":
+	case gemspecRequiredRubyVersionKey:
 		gemspec.RequiredRubyVersion = value
 	case "post_install_message":
 		gemspec.PostInstallMessage = value
