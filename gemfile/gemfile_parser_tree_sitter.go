@@ -288,7 +288,7 @@ func (p *TreeSitterGemfileParser) processSource(node *tree_sitter.Node, gemfile 
 
 	sourceURL := args[0]
 	source := Source{
-		Type: "rubygems",
+		Type: rubygemsSource,
 		URL:  sourceURL,
 	}
 

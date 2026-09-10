@@ -7,11 +7,6 @@ import (
 	"strings"
 )
 
-const (
-	rubygemsURL  = "https://rubygems.org"
-	defaultGroup = "default"
-)
-
 // GemfileWriter handles writing and modifying Gemfiles
 type GemfileWriter struct {
 	filepath string
@@ -137,7 +132,7 @@ func (w *GemfileWriter) formatSource(dep *GemDependency) string {
 
 	var parts []string
 	switch dep.Source.Type {
-	case "git":
+	case gitKey:
 		if strings.Contains(dep.Source.URL, "github.com") {
 			githubPath := extractGitHubPath(dep.Source.URL)
 			if githubPath != "" {

@@ -488,7 +488,7 @@ func (p *GemfileParser) parseSource(line string) (Source, bool, error) {
 	}
 
 	source := Source{
-		Type: "rubygems",
+		Type: rubygemsSource,
 		URL:  matches[1],
 	}
 
